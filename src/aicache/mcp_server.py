@@ -15,21 +15,18 @@ Usage:
     server.run()
 """
 
-import os
-import sys
-import json
 import asyncio
+import json
 import logging
-from pathlib import Path
-from typing import Optional, Dict, Any, List
+import sys
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 # MCP Protocol types (simplified for compatibility)
 try:
     from pydantic import BaseModel, Field
 except ImportError:
-    from dataclasses import dataclass
-
     BaseModel = object
 
     class Field:
@@ -38,8 +35,8 @@ except ImportError:
             self.description = description
 
 
-from .core.cache import CoreCache
 from .config import get_config
+from .core.cache import CoreCache
 
 logger = logging.getLogger(__name__)
 
@@ -48,18 +45,18 @@ class MCPRequest(BaseModel):
     """MCP request message"""
 
     jsonrpc: str = "2.0"
-    id: Optional[int] = None
+    id: int | None = None
     method: str
-    params: Optional[Dict[str, Any]] = {}
+    params: dict[str, Any] | None = None
 
 
 class MCPResponse(BaseModel):
     """MCP response message"""
 
     jsonrpc: str = "2.0"
-    id: Optional[int] = None
-    result: Optional[Any] = None
-    error: Optional[Dict[str, str]] = None
+    id: int | None = None
+    result: Any | None = None
+    error: dict[str, str] | None = None
 
 
 class MCPTool(BaseModel):
@@ -67,7 +64,7 @@ class MCPTool(BaseModel):
 
     name: str
     description: str
-    inputSchema: Dict[str, Any]
+    inputSchema: dict[str, Any]
 
 
 class MCPConnection:
@@ -86,8 +83,8 @@ class MCPConnection:
     # ========== TOOL HANDLERS ==========
 
     def handle_aicache_get(
-        self, prompt: str, context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        self, prompt: str, context: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """
         Get a cached response for a prompt.
 
@@ -112,9 +109,9 @@ class MCPConnection:
         self,
         prompt: str,
         response: str,
-        context: Optional[Dict[str, Any]] = None,
-        ttl_seconds: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        context: dict[str, Any] | None = None,
+        ttl_seconds: int | None = None,
+    ) -> dict[str, Any]:
         """
         Cache a response for a prompt.
 
@@ -133,9 +130,7 @@ class MCPConnection:
             "cache_key": self.cache._get_cache_key(prompt, context),
         }
 
-    def handle_aicache_list(
-        self, limit: int = 10, verbose: bool = False
-    ) -> Dict[str, Any]:
+    def handle_aicache_list(self, limit: int = 10, verbose: bool = False) -> dict[str, Any]:
         """
         List cached entries.
 
@@ -164,7 +159,7 @@ class MCPConnection:
 
         return {"entries": simplified, "total": len(simplified)}
 
-    def handle_aicache_stats(self) -> Dict[str, Any]:
+    def handle_aicache_stats(self) -> dict[str, Any]:
         """
         Get cache statistics.
 
@@ -185,7 +180,7 @@ class MCPConnection:
             "monthly_projection": round(estimated_savings * 30, 2),
         }
 
-    def handle_aicache_clear(self, confirm: bool = False) -> Dict[str, Any]:
+    def handle_aicache_clear(self, confirm: bool = False) -> dict[str, Any]:
         """
         Clear all cache entries.
 
@@ -201,7 +196,7 @@ class MCPConnection:
         count = self.cache.clear()
         return {"success": True, "cleared": count}
 
-    def handle_aicache_delete(self, cache_key: str) -> Dict[str, Any]:
+    def handle_aicache_delete(self, cache_key: str) -> dict[str, Any]:
         """
         Delete a specific cache entry.
 
@@ -214,9 +209,7 @@ class MCPConnection:
         success = self.cache.delete(cache_key)
         return {"success": success}
 
-    def handle_aicache_prune(
-        self, days: int = 30, confirm: bool = False
-    ) -> Dict[str, Any]:
+    def handle_aicache_prune(self, days: int = 30, confirm: bool = False) -> dict[str, Any]:
         """
         Prune old cache entries.
 
@@ -244,7 +237,7 @@ class MCPConnection:
 
     # ========== MCP PROTOCOL HANDLERS ==========
 
-    def handle_initialize(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def handle_initialize(self, params: dict[str, Any]) -> dict[str, Any]:
         """Handle MCP initialize request"""
         return {
             "protocolVersion": "2024-11-05",
@@ -252,7 +245,7 @@ class MCPConnection:
             "serverInfo": {"name": "aicache", "version": "0.2.0"},
         }
 
-    def handle_tools_list(self) -> Dict[str, Any]:
+    def handle_tools_list(self) -> dict[str, Any]:
         """Handle MCP tools/list request"""
         return {
             "tools": [
@@ -374,7 +367,7 @@ class MCPConnection:
             ]
         }
 
-    def handle_tool_call(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    def handle_tool_call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Handle MCP tools/call request"""
         handlers = {
             "aicache_get": self.handle_aicache_get,
@@ -392,6 +385,7 @@ class MCPConnection:
         try:
             # Validate arguments against handler's expected parameters
             import inspect
+
             handler = handlers[name]
             sig = inspect.signature(handler)
             valid_params = set(sig.parameters.keys())
@@ -413,9 +407,7 @@ class MCPConnection:
                 result = self.handle_tools_list()
             elif request.method == "tools/call":
                 tool_name = request.params.get("name") if request.params else None
-                tool_args = (
-                    request.params.get("arguments", {}) if request.params else {}
-                )
+                tool_args = request.params.get("arguments", {}) if request.params else {}
                 result = self.handle_tool_call(tool_name, tool_args)
             else:
                 return MCPResponse(
@@ -465,7 +457,6 @@ class AICacheMCPServer:
 
     def run_tcp(self):
         """Run server using TCP"""
-        import asyncio
         from asyncio import start_server
 
         async def handle_client(reader, writer):
@@ -475,9 +466,7 @@ class AICacheMCPServer:
                 request = MCPRequest(**request_data)
                 response = self.connection.handle_request(request)
 
-                writer.write(
-                    json.dumps(response.model_dump(exclude_none=True)).encode()
-                )
+                writer.write(json.dumps(response.model_dump(exclude_none=True)).encode())
                 await writer.drain()
             except Exception as e:
                 logger.error(f"Client error: {e}")
@@ -498,12 +487,8 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="AI Cache MCP Server")
-    parser.add_argument(
-        "--mode", choices=["stdio", "tcp"], default="stdio", help="Server mode"
-    )
-    parser.add_argument(
-        "--port", type=int, default=8765, help="TCP port (if using tcp mode)"
-    )
+    parser.add_argument("--mode", choices=["stdio", "tcp"], default="stdio", help="Server mode")
+    parser.add_argument("--port", type=int, default=8765, help="TCP port (if using tcp mode)")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
 
     args = parser.parse_args()

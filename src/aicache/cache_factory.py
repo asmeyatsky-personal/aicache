@@ -9,18 +9,14 @@ The factory automatically selects the appropriate implementation based on
 configuration and optional dependencies.
 """
 
-import os
-from typing import Optional, Dict, Any, List
-from pathlib import Path
-
-from .core.cache import CoreCache
 from .config import get_config
+from .core.cache import CoreCache
 
 
 class CacheFactory:
     """Factory for creating appropriate cache instances."""
 
-    _instance: Optional[CoreCache] = None
+    _instance: CoreCache | None = None
     _domain_instance = None
 
     @classmethod
@@ -66,9 +62,9 @@ def get_cache(use_domain: bool = False) -> CoreCache:
 
 
 def create_cache(
-    cache_dir: Optional[str] = None,
-    ttl: Optional[int] = None,
-    max_size_mb: Optional[int] = None,
+    cache_dir: str | None = None,
+    ttl: int | None = None,
+    max_size_mb: int | None = None,
     enable_semantic: bool = False,
     enable_encryption: bool = True,
 ) -> CoreCache:
@@ -97,8 +93,7 @@ def create_cache(
         "ttl": ttl or config.get("ttl", 0),
         "max_size_mb": max_size_mb or config.get("max_size_mb", 1000),
         "enable_semantic": enable_semantic,
-        "enable_encryption": enable_encryption
-        and config.get("security.encrypt_sensitive", True),
+        "enable_encryption": enable_encryption and config.get("security.encrypt_sensitive", True),
     }
 
     return cache
@@ -106,8 +101,8 @@ def create_cache(
 
 # Backward compatibility - re-export CoreCache
 __all__ = [
-    "CoreCache",
     "CacheFactory",
-    "get_cache",
+    "CoreCache",
     "create_cache",
+    "get_cache",
 ]

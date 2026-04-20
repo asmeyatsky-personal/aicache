@@ -1,47 +1,69 @@
-# AI Cache - Stop paying for duplicate AI queries
+"""aicache — drop-in caching for Claude and OpenAI SDK calls."""
 
-__version__ = "0.2.0"
-
-# Primary CLI entry point
-from .modern_cli import main
-
-# Core components
-from .core.cache import CoreCache, get_cache
 from .cache_factory import CacheFactory, create_cache
-
-# Security utilities
+from .config import get_config, get_config_manager
+from .core.cache import CoreCache, get_cache
+from .domain.models import (
+    CacheEntry,
+    CacheMetrics,
+    CachePolicy,
+    CacheResult,
+    EvictionPolicy,
+    SemanticMatch,
+    TokenUsageMetrics,
+)
+from .domain.ports import (
+    CacheMetricsPort,
+    EmbeddingGeneratorPort,
+    EventPublisherPort,
+    QueryNormalizerPort,
+    RepositoryPort,
+    SemanticIndexPort,
+    StoragePort,
+    TokenCounterPort,
+    TOONRepositoryPort,
+)
+from .modern_cli import main
 from .security import (
     SecurityUtils,
-    sanitize_input,
     detect_pii,
-    mask_pii,
     is_safe_prompt,
+    mask_pii,
+    sanitize_input,
     validate_context,
 )
 
-# Domain models
-from .domain.models import (
-    CacheEntry,
-    CachePolicy,
-    CacheMetrics,
-    TokenUsageMetrics,
-    SemanticMatch,
-    CacheResult,
-    EvictionPolicy,
-)
+__version__ = "0.3.0-dev"
 
-# Domain ports (interfaces)
-from .domain.ports import (
-    StoragePort,
-    SemanticIndexPort,
-    TokenCounterPort,
-    EventPublisherPort,
-    QueryNormalizerPort,
-    CacheMetricsPort,
-    EmbeddingGeneratorPort,
-    RepositoryPort,
-    TOONRepositoryPort,
-)
-
-# Configuration
-from .config import get_config, get_config_manager
+__all__ = [
+    "CacheEntry",
+    "CacheFactory",
+    "CacheMetrics",
+    "CacheMetricsPort",
+    "CachePolicy",
+    "CacheResult",
+    "CoreCache",
+    "EmbeddingGeneratorPort",
+    "EventPublisherPort",
+    "EvictionPolicy",
+    "QueryNormalizerPort",
+    "RepositoryPort",
+    "SecurityUtils",
+    "SemanticIndexPort",
+    "SemanticMatch",
+    "StoragePort",
+    "TOONRepositoryPort",
+    "TokenCounterPort",
+    "TokenUsageMetrics",
+    "__version__",
+    "create_cache",
+    "detect_pii",
+    "get_cache",
+    "get_config",
+    "get_config_manager",
+    "is_safe_prompt",
+    "main",
+    "mask_pii",
+    "sanitize_input",
+    "validate_context",
+]

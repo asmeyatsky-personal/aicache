@@ -5,15 +5,15 @@ This module provides basic file-based caching functionality without requiring
 heavy ML dependencies. Use this for simple exact-match caching.
 """
 
-import os
-import json
 import hashlib
+import json
 import logging
+import os
 import time
-from pathlib import Path
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +25,9 @@ class CacheEntry:
     key: str
     value: str
     timestamp: float
-    ttl_seconds: Optional[int] = None
+    ttl_seconds: int | None = None
     access_count: int = 0
-    last_accessed: Optional[float] = None
+    last_accessed: float | None = None
 
     def is_expired(self) -> bool:
         """Check if entry has expired."""
@@ -49,7 +49,7 @@ class CoreCache:
     Perfect for getting started with minimal dependencies.
     """
 
-    def __init__(self, cache_dir: Optional[str] = None):
+    def __init__(self, cache_dir: str | None = None):
         if cache_dir is None:
             cache_dir = os.path.expanduser("~/.cache/aicache")
         self.cache_dir = Path(cache_dir)
@@ -61,9 +61,9 @@ class CoreCache:
         """Load cache index from disk."""
         if self._index_file.exists():
             try:
-                with open(self._index_file, "r") as f:
+                with open(self._index_file) as f:
                     self._index = json.load(f)
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 self._index = {}
         else:
             self._index = {}
@@ -73,12 +73,10 @@ class CoreCache:
         try:
             with open(self._index_file, "w") as f:
                 json.dump(self._index, f)
-        except IOError:
+        except OSError:
             logger.warning("Failed to save cache index")
 
-    def _get_cache_key(
-        self, prompt: str, context: Optional[Dict[str, Any]] = None
-    ) -> str:
+    def _get_cache_key(self, prompt: str, context: dict[str, Any] | None = None) -> str:
         """Generate deterministic cache key."""
         hasher = hashlib.sha256()
         hasher.update(prompt.encode("utf-8"))
@@ -91,12 +89,10 @@ class CoreCache:
         """Get cache file path for key, with path traversal protection."""
         cache_file = (self.cache_dir / f"{cache_key}.json").resolve()
         if not str(cache_file).startswith(str(self.cache_dir.resolve())):
-            raise ValueError(f"Invalid cache key: path traversal detected")
+            raise ValueError("Invalid cache key: path traversal detected")
         return cache_file
 
-    def get(
-        self, prompt: str, context: Optional[Dict[str, Any]] = None
-    ) -> Optional[Dict[str, Any]]:
+    def get(self, prompt: str, context: dict[str, Any] | None = None) -> dict[str, Any] | None:
         """
         Get cached response for prompt (backward compatible).
 
@@ -114,7 +110,7 @@ class CoreCache:
             return None
 
         try:
-            with open(cache_file, "r") as f:
+            with open(cache_file) as f:
                 data = json.load(f)
 
             entry = CacheEntry(**data)
@@ -140,13 +136,11 @@ class CoreCache:
 
             return data
 
-        except (json.JSONDecodeError, IOError, TypeError):
+        except (OSError, json.JSONDecodeError, TypeError):
             self.delete(cache_key)
             return None
 
-    def get_value(
-        self, prompt: str, context: Optional[Dict[str, Any]] = None
-    ) -> Optional[str]:
+    def get_value(self, prompt: str, context: dict[str, Any] | None = None) -> str | None:
         """
         Get just the cached response value (new API).
 
@@ -160,7 +154,7 @@ class CoreCache:
             return None
 
         try:
-            with open(cache_file, "r") as f:
+            with open(cache_file) as f:
                 data = json.load(f)
 
             entry = CacheEntry(**data)
@@ -171,11 +165,11 @@ class CoreCache:
 
             return entry.value
 
-        except (json.JSONDecodeError, IOError, TypeError):
+        except (OSError, json.JSONDecodeError, TypeError):
             self.delete(cache_key)
             return None
 
-    def inspect(self, cache_key: str) -> Optional[Dict[str, Any]]:
+    def inspect(self, cache_key: str) -> dict[str, Any] | None:
         """
         Inspect a cache entry by key (backward compatible).
         """
@@ -184,7 +178,7 @@ class CoreCache:
             return None
 
         try:
-            with open(cache_file, "r") as f:
+            with open(cache_file) as f:
                 data = json.load(f)
                 # Add backward compatibility keys
                 if "value" in data:
@@ -193,10 +187,10 @@ class CoreCache:
                 if "prompt" not in data:
                     data["prompt"] = ""  # Placeholder
                 return data
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             return None
 
-    def prune(self, max_age_days: int = 30, max_size_mb: Optional[int] = None) -> int:
+    def prune(self, max_age_days: int = 30, max_size_mb: int | None = None) -> int:
         """
         Prune expired cache entries (backward compatible).
 
@@ -218,7 +212,7 @@ class CoreCache:
                 continue
 
             try:
-                with open(cache_file, "r") as f:
+                with open(cache_file) as f:
                     data = json.load(f)
                     timestamp = data.get("timestamp", 0)
 
@@ -226,7 +220,7 @@ class CoreCache:
                     cache_file.unlink()
                     del self._index[cache_key]
                     pruned += 1
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 continue
 
         if pruned > 0:
@@ -238,8 +232,8 @@ class CoreCache:
         self,
         prompt: str,
         response: str,
-        context: Optional[Dict[str, Any]] = None,
-        ttl_seconds: Optional[int] = None,
+        context: dict[str, Any] | None = None,
+        ttl_seconds: int | None = None,
     ) -> None:
         """
         Cache a response for the given prompt.
@@ -279,7 +273,7 @@ class CoreCache:
             }
             self._save_index()
 
-        except IOError:
+        except OSError:
             logger.warning(f"Failed to write cache entry: {cache_key}")
 
     def delete(self, cache_key: str) -> bool:
@@ -321,9 +315,7 @@ class CoreCache:
         self._save_index()
         return count
 
-    def list(
-        self, limit: Optional[int] = None, verbose: bool = False
-    ) -> List[Dict[str, Any]]:
+    def list(self, limit: int | None = None, verbose: bool = False) -> list[dict[str, Any]]:
         """
         List cache entries.
 
@@ -347,10 +339,10 @@ class CoreCache:
                     # Read prompt from file for backward compatibility
                     prompt = metadata.get("prompt_preview", "").replace("...", "")
                     try:
-                        with open(cache_file, "r") as f:
+                        with open(cache_file) as f:
                             file_data = json.load(f)
                             prompt = file_data.get("prompt", prompt)
-                    except (json.JSONDecodeError, IOError, OSError):
+                    except (json.JSONDecodeError, OSError):
                         pass
 
                     entry_data = {
@@ -374,12 +366,10 @@ class CoreCache:
             reverse=True,
         )
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         total_entries = len(self._index)
-        total_accesses = sum(
-            meta.get("access_count", 0) for meta in self._index.values()
-        )
+        total_accesses = sum(meta.get("access_count", 0) for meta in self._index.values())
 
         # Calculate cache size
         total_size = 0

@@ -1,0 +1,178 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aicache"
+version = "0.3.0-dev"
+description = "Drop-in caching for Claude and OpenAI SDK calls with semantic similarity and cost telemetry"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.12"
+authors = [
+  {name = "AI Cache Contributors", email = "contributors@aicache.dev"},
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+  "PyYAML>=6.0",
+  "aiofiles>=24.1",
+  "aiosqlite>=0.21",
+  "msgpack>=1.1",
+  "click>=8.0",
+  "rich>=12.0",
+  "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+semantic = [
+  "sentence-transformers>=2.0,<4.0",
+  "chromadb>=0.5,<2.0",
+  "numpy>=1.26,<3.0",
+]
+anthropic = ["anthropic>=0.40"]
+openai = ["openai>=1.50", "tiktoken>=0.7"]
+observability = ["opentelemetry-api>=1.27", "opentelemetry-sdk>=1.27"]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "pytest-cov>=5",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "import-linter>=2.1",
+  "pip-audit>=2.7",
+]
+all = [
+  "aicache[semantic,anthropic,openai,observability,dev]",
+]
+
+[project.scripts]
+aicache = "aicache.modern_cli:main"
+
+[project.urls]
+Homepage = "https://github.com/asmeyatsky/aicache"
+Issues = "https://github.com/asmeyatsky/aicache/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+aicache = ["py.typed"]
+
+# ------------------------------------------------------------------
+# Testing
+# ------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+  "--strict-markers",
+  "--strict-config",
+]
+
+[tool.coverage.run]
+source = ["src/aicache"]
+# Branch coverage enabled in Phase 4+ when semantic paths stabilise.
+branch = false
+omit = [
+  "src/aicache/__main__.py",
+  # Modules scheduled for rewrite in Phase 1+ — excluded so Phase 0
+  # gates reflect what we intend to keep. Ratchet revisits this list
+  # as each phase lands.
+  "src/aicache/installer.py",
+]
+
+[tool.coverage.report]
+exclude_also = [
+  "pragma: no cover",
+  "raise NotImplementedError",
+  "if TYPE_CHECKING:",
+  "\\.\\.\\.",
+  "@abstractmethod",
+]
+show_missing = true
+skip_covered = false
+
+# ------------------------------------------------------------------
+# Lint / format
+# ------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E", "F", "W",     # pycodestyle/pyflakes
+  "I",               # isort
+  "B",               # bugbear
+  "UP",              # pyupgrade
+  "RUF",             # ruff-specific
+]
+ignore = [
+  "E501",  # line length (use formatter)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B", "UP"]
+
+# ------------------------------------------------------------------
+# Types (strict on the layers that matter for §2)
+# ------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # gradual — tighten in Phase 1+
+
+[[tool.mypy.overrides]]
+module = ["aicache.domain.*", "aicache.application.*"]
+strict = true
+
+# ------------------------------------------------------------------
+# Architectural fitness (import-linter) — §2 layer direction
+# ------------------------------------------------------------------
+[tool.importlinter]
+root_package = "aicache"
+
+[[tool.importlinter.contracts]]
+name = "Domain is independent"
+type = "forbidden"
+source_modules = ["aicache.domain"]
+forbidden_modules = [
+  "aicache.application",
+  "aicache.infrastructure",
+  "aicache.modern_cli",
+  "aicache.mcp_server",
+  "aicache.plugins",
+  "aicache.integrations",
+]
+
+[[tool.importlinter.contracts]]
+name = "Application imports only domain"
+type = "forbidden"
+source_modules = ["aicache.application"]
+forbidden_modules = [
+  "aicache.infrastructure",
+  "aicache.modern_cli",
+  "aicache.mcp_server",
+  "aicache.plugins",
+  "aicache.integrations",
+]
+
+[[tool.importlinter.contracts]]
+name = "Infrastructure does not import presentation"
+type = "forbidden"
+source_modules = ["aicache.infrastructure"]
+forbidden_modules = [
+  "aicache.modern_cli",
+  "aicache.plugins",
+  "aicache.integrations",
+]

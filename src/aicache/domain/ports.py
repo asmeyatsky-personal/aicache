@@ -6,15 +6,16 @@ This separation ensures domain logic is independent of specific technologies.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any
-from .models import CacheEntry, SemanticMatch, CacheInvalidationEvent, TokenUsageMetrics
+from typing import Any
+
+from .models import CacheEntry, CacheInvalidationEvent, SemanticMatch
 
 
 class StoragePort(ABC):
     """Port for persistent cache storage."""
 
     @abstractmethod
-    async def get(self, key: str) -> Optional[CacheEntry]:
+    async def get(self, key: str) -> CacheEntry | None:
         """Retrieve a cache entry by key."""
         pass
 
@@ -34,7 +35,7 @@ class StoragePort(ABC):
         pass
 
     @abstractmethod
-    async def get_all_keys(self) -> List[str]:
+    async def get_all_keys(self) -> list[str]:
         """Get all cache keys."""
         pass
 
@@ -53,12 +54,16 @@ class SemanticIndexPort(ABC):
     """Port for semantic similarity indexing and search."""
 
     @abstractmethod
-    async def index_embedding(self, key: str, embedding: List[float], metadata: Dict[str, Any]) -> None:
+    async def index_embedding(
+        self, key: str, embedding: list[float], metadata: dict[str, Any]
+    ) -> None:
         """Index an embedding with metadata."""
         pass
 
     @abstractmethod
-    async def find_similar(self, embedding: List[float], threshold: float = 0.85) -> List[SemanticMatch]:
+    async def find_similar(
+        self, embedding: list[float], threshold: float = 0.85
+    ) -> list[SemanticMatch]:
         """Find semantically similar indexed embeddings."""
         pass
 
@@ -92,7 +97,7 @@ class TokenCounterPort(ABC):
         pass
 
     @abstractmethod
-    def get_supported_models(self) -> List[str]:
+    def get_supported_models(self) -> list[str]:
         """Get list of supported models."""
         pass
 
@@ -134,8 +139,9 @@ class CacheMetricsPort(ABC):
     """Port for cache metrics collection and reporting."""
 
     @abstractmethod
-    async def record_hit(self, entry_key: str, response_time_ms: float,
-                        tokens_saved: int, cost_saved: float) -> None:
+    async def record_hit(
+        self, entry_key: str, response_time_ms: float, tokens_saved: int, cost_saved: float
+    ) -> None:
         """Record a cache hit."""
         pass
 
@@ -150,7 +156,7 @@ class CacheMetricsPort(ABC):
         pass
 
     @abstractmethod
-    async def get_metrics(self) -> Dict[str, Any]:
+    async def get_metrics(self) -> dict[str, Any]:
         """Get aggregate metrics."""
         pass
 
@@ -159,12 +165,12 @@ class EmbeddingGeneratorPort(ABC):
     """Port for generating embeddings from text."""
 
     @abstractmethod
-    async def generate_embedding(self, text: str) -> List[float]:
+    async def generate_embedding(self, text: str) -> list[float]:
         """Generate embedding for text."""
         pass
 
     @abstractmethod
-    async def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def generate_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for multiple texts."""
         pass
 
@@ -188,12 +194,12 @@ class TOONRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    async def get_all_toons(self, limit: int = 100) -> List:
+    async def get_all_toons(self, limit: int = 100) -> list:
         """Retrieve all TOONs."""
         pass
 
     @abstractmethod
-    async def get_toons_by_type(self, operation_type: str, limit: int = 100) -> List:
+    async def get_toons_by_type(self, operation_type: str, limit: int = 100) -> list:
         """Retrieve TOONs by type."""
         pass
 
@@ -212,7 +218,7 @@ class RepositoryPort(ABC):
         pass
 
     @abstractmethod
-    async def get_by_key(self, key: str) -> Optional[CacheEntry]:
+    async def get_by_key(self, key: str) -> CacheEntry | None:
         """Retrieve by key."""
         pass
 
@@ -222,11 +228,11 @@ class RepositoryPort(ABC):
         pass
 
     @abstractmethod
-    async def find_expired(self) -> List[CacheEntry]:
+    async def find_expired(self) -> list[CacheEntry]:
         """Find all expired entries."""
         pass
 
     @abstractmethod
-    async def find_by_policy(self, policy_name: str) -> List[CacheEntry]:
+    async def find_by_policy(self, policy_name: str) -> list[CacheEntry]:
         """Find entries matching eviction policy criteria."""
         pass

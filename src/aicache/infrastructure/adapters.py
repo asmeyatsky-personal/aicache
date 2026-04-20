@@ -5,17 +5,22 @@ These adapters implement the port interfaces defined in the domain layer.
 They handle interactions with external services and storage backends.
 """
 
-import logging
 import json
-from typing import Optional, List, Dict, Any
-from pathlib import Path
+import logging
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
+from ..domain.models import CacheEntry, CacheInvalidationEvent, SemanticMatch
 from ..domain.ports import (
-    StoragePort, QueryNormalizerPort, TokenCounterPort,
-    EventPublisherPort, CacheMetricsPort, SemanticIndexPort, EmbeddingGeneratorPort
+    CacheMetricsPort,
+    EmbeddingGeneratorPort,
+    EventPublisherPort,
+    QueryNormalizerPort,
+    SemanticIndexPort,
+    StoragePort,
+    TokenCounterPort,
 )
-from ..domain.models import CacheEntry, SemanticMatch, CacheInvalidationEvent
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +29,9 @@ class InMemoryStorageAdapter(StoragePort):
     """In-memory cache storage adapter."""
 
     def __init__(self):
-        self._cache: Dict[str, CacheEntry] = {}
+        self._cache: dict[str, CacheEntry] = {}
 
-    async def get(self, key: str) -> Optional[CacheEntry]:
+    async def get(self, key: str) -> CacheEntry | None:
         """Retrieve a cache entry by key."""
         return self._cache.get(key)
 
@@ -45,7 +50,7 @@ class InMemoryStorageAdapter(StoragePort):
         """Check if cache entry exists."""
         return key in self._cache
 
-    async def get_all_keys(self) -> List[str]:
+    async def get_all_keys(self) -> list[str]:
         """Get all cache keys."""
         return list(self._cache.keys())
 
@@ -65,17 +70,17 @@ class FileSystemStorageAdapter(StoragePort):
         self.cache_dir = Path(cache_dir).expanduser()
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    async def get(self, key: str) -> Optional[CacheEntry]:
+    async def get(self, key: str) -> CacheEntry | None:
         """Retrieve a cache entry by key."""
         cache_file = self.cache_dir / key
         if not cache_file.exists():
             return None
 
         try:
-            with open(cache_file, 'r') as f:
+            with open(cache_file) as f:
                 data = json.load(f)
                 return self._deserialize_entry(data)
-        except (json.JSONDecodeError, IOError) as e:
+        except (OSError, json.JSONDecodeError) as e:
             logger.error(f"Error reading cache file {key}: {e}")
             return None
 
@@ -83,9 +88,9 @@ class FileSystemStorageAdapter(StoragePort):
         """Store a cache entry."""
         cache_file = self.cache_dir / entry.key
         try:
-            with open(cache_file, 'w') as f:
+            with open(cache_file, "w") as f:
                 json.dump(self._serialize_entry(entry), f)
-        except IOError as e:
+        except OSError as e:
             logger.error(f"Error writing cache file {entry.key}: {e}")
 
     async def delete(self, key: str) -> bool:
@@ -103,7 +108,7 @@ class FileSystemStorageAdapter(StoragePort):
         """Check if cache entry exists."""
         return (self.cache_dir / key).exists()
 
-    async def get_all_keys(self) -> List[str]:
+    async def get_all_keys(self) -> list[str]:
         """Get all cache keys."""
         return [f.name for f in self.cache_dir.iterdir() if f.is_file()]
 
@@ -121,7 +126,7 @@ class FileSystemStorageAdapter(StoragePort):
                     logger.error(f"Error clearing cache file {f.name}: {e}")
 
     @staticmethod
-    def _serialize_entry(entry: CacheEntry) -> Dict[str, Any]:
+    def _serialize_entry(entry: CacheEntry) -> dict[str, Any]:
         """Serialize cache entry to JSON."""
         return {
             "key": entry.key,
@@ -133,13 +138,15 @@ class FileSystemStorageAdapter(StoragePort):
         }
 
     @staticmethod
-    def _deserialize_entry(data: Dict[str, Any]) -> CacheEntry:
+    def _deserialize_entry(data: dict[str, Any]) -> CacheEntry:
         """Deserialize cache entry from JSON."""
         return CacheEntry(
             key=data["key"],
             value=bytes.fromhex(data["value"]) if data.get("value") else b"",
             created_at=datetime.fromisoformat(data["created_at"]),
-            expires_at=datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None,
+            expires_at=datetime.fromisoformat(data["expires_at"])
+            if data.get("expires_at")
+            else None,
             ttl_seconds=data.get("ttl_seconds"),
             context=data.get("context"),
         )
@@ -198,7 +205,7 @@ class OpenAITokenCounterAdapter(TokenCounterPort):
 
         return prompt_cost + completion_cost
 
-    def get_supported_models(self) -> List[str]:
+    def get_supported_models(self) -> list[str]:
         """Get list of supported models."""
         return ["gpt-4", "gpt-3.5-turbo", "gpt-4-turbo"]
 
@@ -207,7 +214,7 @@ class InMemoryEventPublisherAdapter(EventPublisherPort):
     """In-memory event publisher adapter."""
 
     def __init__(self):
-        self._subscribers: List = []
+        self._subscribers: list = []
 
     async def publish(self, event: CacheInvalidationEvent) -> None:
         """Publish a cache invalidation event."""
@@ -238,8 +245,9 @@ class InMemoryCacheMetricsAdapter(CacheMetricsPort):
         self._semantic_matches = 0
         self._false_positives = 0
 
-    async def record_hit(self, entry_key: str, response_time_ms: float,
-                        tokens_saved: int, cost_saved: float) -> None:
+    async def record_hit(
+        self, entry_key: str, response_time_ms: float, tokens_saved: int, cost_saved: float
+    ) -> None:
         """Record a cache hit."""
         self._hits += 1
         self._response_times.append(response_time_ms)
@@ -255,11 +263,13 @@ class InMemoryCacheMetricsAdapter(CacheMetricsPort):
         """Record a cache eviction."""
         self._evictions += 1
 
-    async def get_metrics(self) -> Dict[str, Any]:
+    async def get_metrics(self) -> dict[str, Any]:
         """Get aggregate metrics."""
         total = self._hits + self._misses
         hit_rate = self._hits / total if total > 0 else 0.0
-        avg_response_time = sum(self._response_times) / len(self._response_times) if self._response_times else 0.0
+        avg_response_time = (
+            sum(self._response_times) / len(self._response_times) if self._response_times else 0.0
+        )
 
         return {
             "total_hits": self._hits,
@@ -279,15 +289,19 @@ class SimpleSemanticIndexAdapter(SemanticIndexPort):
     """Simple in-memory semantic index adapter."""
 
     def __init__(self):
-        self._embeddings: Dict[str, List[float]] = {}
-        self._metadata: Dict[str, Dict[str, Any]] = {}
+        self._embeddings: dict[str, list[float]] = {}
+        self._metadata: dict[str, dict[str, Any]] = {}
 
-    async def index_embedding(self, key: str, embedding: List[float], metadata: Dict[str, Any]) -> None:
+    async def index_embedding(
+        self, key: str, embedding: list[float], metadata: dict[str, Any]
+    ) -> None:
         """Index an embedding with metadata."""
         self._embeddings[key] = embedding
         self._metadata[key] = metadata
 
-    async def find_similar(self, embedding: List[float], threshold: float = 0.85) -> List[SemanticMatch]:
+    async def find_similar(
+        self, embedding: list[float], threshold: float = 0.85
+    ) -> list[SemanticMatch]:
         """Find semantically similar indexed embeddings."""
         matches = []
 
@@ -295,11 +309,11 @@ class SimpleSemanticIndexAdapter(SemanticIndexPort):
             similarity = self._cosine_similarity(embedding, indexed_embedding)
 
             if similarity >= threshold:
-                matches.append(SemanticMatch(
-                    similarity_score=similarity,
-                    matched_entry_key=key,
-                    confidence=similarity
-                ))
+                matches.append(
+                    SemanticMatch(
+                        similarity_score=similarity, matched_entry_key=key, confidence=similarity
+                    )
+                )
 
         return sorted(matches, key=lambda m: m.similarity_score, reverse=True)
 
@@ -318,14 +332,14 @@ class SimpleSemanticIndexAdapter(SemanticIndexPort):
         self._metadata.clear()
 
     @staticmethod
-    def _cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
+    def _cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
         """Calculate cosine similarity between two vectors."""
         if len(vec1) != len(vec2):
             return 0.0
 
-        dot_product = sum(a * b for a, b in zip(vec1, vec2))
-        magnitude1 = sum(a ** 2 for a in vec1) ** 0.5
-        magnitude2 = sum(b ** 2 for b in vec2) ** 0.5
+        dot_product = sum(a * b for a, b in zip(vec1, vec2, strict=False))
+        magnitude1 = sum(a**2 for a in vec1) ** 0.5
+        magnitude2 = sum(b**2 for b in vec2) ** 0.5
 
         if magnitude1 == 0 or magnitude2 == 0:
             return 0.0
@@ -339,10 +353,11 @@ class SimpleEmbeddingGeneratorAdapter(EmbeddingGeneratorPort):
     def __init__(self, dimension: int = 768):
         self._dimension = dimension
 
-    async def generate_embedding(self, text: str) -> List[float]:
+    async def generate_embedding(self, text: str) -> list[float]:
         """Generate embedding for text."""
         # Simple hash-based embedding (not semantically meaningful)
         import hashlib
+
         hash_obj = hashlib.sha256(text.encode())
         hash_int = int(hash_obj.hexdigest(), 16)
 
@@ -353,7 +368,7 @@ class SimpleEmbeddingGeneratorAdapter(EmbeddingGeneratorPort):
 
         return embeddings
 
-    async def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def generate_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for multiple texts."""
         return [await self.generate_embedding(text) for text in texts]
 

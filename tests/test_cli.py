@@ -1,9 +1,9 @@
-import unittest
-import subprocess
 import os
 import shutil
-from pathlib import Path
+import subprocess
 import sys
+import unittest
+from pathlib import Path
 
 
 class TestCLI(unittest.TestCase):
@@ -13,14 +13,12 @@ class TestCLI(unittest.TestCase):
         (self.test_dir / ".git").mkdir(exist_ok=True)
         os.chdir(self.test_dir)
         self.env = os.environ.copy()
-        self.env["PYTHONPATH"] = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "../src")
-        )
+        self.env["PYTHONPATH"] = os.path.abspath(os.path.join(os.path.dirname(__file__), "../src"))
         # Use the modern CLI entry point via the aicache package
         self.cli_path = [sys.executable, "-m", "aicache"]
         # Clear the cache before each test (use --confirm to skip prompt)
         subprocess.run(
-            self.cli_path + ["clear", "--confirm"],
+            [*self.cli_path, "clear", "--confirm"],
             env=self.env,
             capture_output=True,
         )
@@ -33,7 +31,7 @@ class TestCLI(unittest.TestCase):
         # Set a value via the cache API directly since modern CLI
         # doesn't have a simple set command like the old CLI
         result = subprocess.run(
-            self.cli_path + ["stats"],
+            [*self.cli_path, "stats"],
             capture_output=True,
             text=True,
             env=self.env,
@@ -44,7 +42,7 @@ class TestCLI(unittest.TestCase):
 
     def test_cli_clear(self):
         result = subprocess.run(
-            self.cli_path + ["clear", "--confirm"],
+            [*self.cli_path, "clear", "--confirm"],
             capture_output=True,
             text=True,
             env=self.env,
@@ -53,7 +51,7 @@ class TestCLI(unittest.TestCase):
 
     def test_cli_help(self):
         result = subprocess.run(
-            self.cli_path + ["--help"],
+            [*self.cli_path, "--help"],
             capture_output=True,
             text=True,
             env=self.env,
@@ -63,7 +61,5 @@ class TestCLI(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    sys.path.insert(
-        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src"))
-    )
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
     unittest.main()

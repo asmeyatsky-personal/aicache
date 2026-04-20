@@ -10,31 +10,28 @@ This is the primary CLI for aicache. It provides:
 All commands use the Rich library for beautiful output.
 """
 
-import os
-import sys
 import json
-import time
 import shutil
-import warnings
-from pathlib import Path
-from typing import Optional, Dict, Any, List
+import sys
+import time
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import click
+from rich import box
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.prompt import Prompt, Confirm
-from rich import box
+from rich.prompt import Confirm, Prompt
+from rich.table import Table
 
 try:
     import yaml
 except ImportError:
     yaml = None
 
-from .core.cache import CoreCache, get_cache
-from .config import get_config, get_config_manager
+from .config import get_config_manager
+from .core.cache import get_cache
 
 console = Console()
 
@@ -126,9 +123,7 @@ def init(force):
 
     if detected_tools:
         console.print(f"\n🔍 Detected AI CLI tools: {', '.join(detected_tools)}")
-        console.print(
-            "💡 Run 'aicache install --setup-wrappers' to enable automatic caching"
-        )
+        console.print("💡 Run 'aicache install --setup-wrappers' to enable automatic caching")
     else:
         console.print("⚠️  No common AI CLI tools detected.")
 
@@ -362,7 +357,7 @@ def inspect(cache_key):
         return
 
     try:
-        with open(cache_file, "r") as f:
+        with open(cache_file) as f:
             data = json.load(f)
 
         console.print(
@@ -568,9 +563,7 @@ def toon_list(limit, verbose):
         repo = FileSystemTOONRepositoryAdapter()
     except Exception as e:
         console.print(f"[yellow]⚠ TOON data not available: {e}[/yellow]")
-        console.print(
-            "[dim]TOON tracking requires running cache operations first.[/dim]"
-        )
+        console.print("[dim]TOON tracking requires running cache operations first.[/dim]")
         return
 
     import asyncio
@@ -601,9 +594,7 @@ def toon_list(limit, verbose):
         tokens = str(t.token_delta.saved_total)
         cost = f"${t.token_delta.cost_saved:.4f}"
         sim = (
-            f"{t.semantic_data.similarity_score:.2f}"
-            if t.semantic_data.similarity_score
-            else "N/A"
+            f"{t.semantic_data.similarity_score:.2f}" if t.semantic_data.similarity_score else "N/A"
         )
 
         table.add_row(op_id, op_type, tokens, cost, sim)
@@ -738,9 +729,7 @@ def mcp():
 
 
 @mcp.command("start")
-@click.option(
-    "--mode", type=click.Choice(["stdio", "tcp"]), default="stdio", help="Server mode"
-)
+@click.option("--mode", type=click.Choice(["stdio", "tcp"]), default="stdio", help="Server mode")
 @click.option("--port", type=int, default=8765, help="TCP port")
 def mcp_start(mode, port):
     """Start the MCP server"""
@@ -767,7 +756,7 @@ def mcp_start(mode, port):
 @mcp.command("config")
 def mcp_config():
     """Show MCP configuration for Claude Desktop"""
-    config_path = Path.home() / ".config" / "aicache"
+    Path.home() / ".config" / "aicache"
 
     console.print(
         Panel.fit(
@@ -813,9 +802,7 @@ def config_get(key):
 
     if isinstance(value, dict):
         console.print(
-            yaml.dump(value, default_flow_style=False)
-            if yaml
-            else json.dumps(value, indent=2)
+            yaml.dump(value, default_flow_style=False) if yaml else json.dumps(value, indent=2)
         )
     else:
         console.print(str(value))
@@ -839,7 +826,7 @@ def config_set(key, value):
     if success:
         console.print(f"✅ [green]Set {key} = {parsed_value}[/green]")
     else:
-        console.print(f"❌ [red]Failed to set configuration[/red]")
+        console.print("❌ [red]Failed to set configuration[/red]")
 
 
 @config.command("validate")
@@ -914,7 +901,9 @@ def provider_set(name):
     if service.set_provider(name):
         config = service.get_provider_config()
         console.print(f"Active provider: [bold]{name}[/bold]")
-        console.print(f"  Auto cache: {'Yes' if config.auto_cache_enabled else 'No (manual prefix required)'}")
+        console.print(
+            f"  Auto cache: {'Yes' if config.auto_cache_enabled else 'No (manual prefix required)'}"
+        )
         console.print(f"  Min tokens: {config.cache_min_tokens}")
         console.print(f"  Cache TTL: {config.cache_ttl_seconds // 60} minutes")
     else:
@@ -926,7 +915,6 @@ def provider_set(name):
 def provider_info(name):
     """Show detailed provider caching information"""
     from .application.prompt_cache_service import PromptCacheService
-    from .domain.prompt_caching import CacheProvider
 
     service = PromptCacheService()
 
@@ -958,12 +946,12 @@ def provider_info(name):
         Panel.fit(
             f"""[bold]{provider_name.upper()} Prompt Caching[/bold]
 
-{details.get(provider_name, 'No details available.')}
+{details.get(provider_name, "No details available.")}
 
 [bold]Configuration:[/bold]
   Min tokens for caching: {config.cache_min_tokens}
   Cache TTL: {config.cache_ttl_seconds // 60} minutes
-  Auto cache: {'Enabled' if config.auto_cache_enabled else 'Disabled (manual)'}""",
+  Auto cache: {"Enabled" if config.auto_cache_enabled else "Disabled (manual)"}""",
             title=f"Provider: {provider_name}",
             border_style="blue",
         )
@@ -990,19 +978,19 @@ def report(days, json_out):
             f"""[bold]Cost Savings Report - Last {days} Days[/bold]
 
 [bold]Overall Performance[/bold]
-  Total Queries:      {report_data['total_queries']:,}
-  Cache Hits:         {report_data['total_hits']:,}
-  Hit Rate:           {report_data['hit_rate_percent']:.1f}%
-  Tokens Saved:       {report_data['total_tokens_saved']:,}
+  Total Queries:      {report_data["total_queries"]:,}
+  Cache Hits:         {report_data["total_hits"]:,}
+  Hit Rate:           {report_data["hit_rate_percent"]:.1f}%
+  Tokens Saved:       {report_data["total_tokens_saved"]:,}
 
 [bold green]Estimated Savings[/bold green]
-  This Period:        ${report_data['total_estimated_savings']:.4f}
-  Monthly Projection: ${report_data['monthly_projection']:.2f}
+  This Period:        ${report_data["total_estimated_savings"]:.4f}
+  Monthly Projection: ${report_data["monthly_projection"]:.2f}
 
 [bold]All-Time[/bold]
-  Total Queries:      {report_data['all_time']['queries']:,}
-  Total Hits:         {report_data['all_time']['hits']:,}
-  Total Tokens Saved: {report_data['all_time']['tokens_saved']:,}""",
+  Total Queries:      {report_data["all_time"]["queries"]:,}
+  Total Hits:         {report_data["all_time"]["hits"]:,}
+  Total Tokens Saved: {report_data["all_time"]["tokens_saved"]:,}""",
             title="Cost Savings Report",
             border_style="green",
         )
@@ -1011,8 +999,7 @@ def report(days, json_out):
     # Per-provider breakdown
     if report_data["by_provider"]:
         table = Table(
-            show_header=True, header_style="bold blue", box=box.ROUNDED,
-            title="By Provider"
+            show_header=True, header_style="bold blue", box=box.ROUNDED, title="By Provider"
         )
         table.add_column("Provider", width=12)
         table.add_column("Queries", justify="right", width=10)

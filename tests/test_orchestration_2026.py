@@ -7,15 +7,16 @@ Tests the parallelism-first design patterns from skill2026.md:
 - Backpressure and rate limiting
 """
 
-import pytest
 import asyncio
+
+import pytest
+
 from aicache.application.orchestration import (
-    DAGOrchestrator,
-    WorkflowStep,
-    WorkflowStatus,
-    StepResult,
     CacheWorkflowOrchestrator,
-    AgentTaskDecomposer,
+    DAGOrchestrator,
+    StepResult,
+    WorkflowStatus,
+    WorkflowStep,
 )
 
 
@@ -59,7 +60,7 @@ class TestDAGOrchestrator:
             ]
         )
 
-        result = await orchestrator.execute({}, {})
+        await orchestrator.execute({}, {})
 
         # All three tasks should have run
         assert len(execution_order) == 3
@@ -84,7 +85,7 @@ class TestDAGOrchestrator:
             ]
         )
 
-        result = await orchestrator.execute({}, {})
+        await orchestrator.execute({}, {})
 
         # Must be in order due to dependencies
         assert execution_order == ["a", "b", "c"]
@@ -110,7 +111,7 @@ class TestDAGOrchestrator:
             ]
         )
 
-        result = await orchestrator.execute({}, {})
+        await orchestrator.execute({}, {})
 
         # c should start after both a and b complete
         assert execution_times["c"] > execution_times["a"]

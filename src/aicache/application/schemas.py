@@ -5,13 +5,14 @@ This module defines Pydantic schemas for AI-generated structured data.
 Following skill2026.md: Always define explicit schemas for AI output.
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
 
 
-class CacheTier(str, Enum):
+class CacheTier(StrEnum):
     """Cache tier levels."""
 
     HOT = "hot"  # Frequently accessed
@@ -19,7 +20,7 @@ class CacheTier(str, Enum):
     COLD = "cold"  # Rarely accessed
 
 
-class CacheHitType(str, Enum):
+class CacheHitType(StrEnum):
     """Type of cache hit."""
 
     EXACT = "exact"  # Exact match
@@ -44,7 +45,7 @@ class CacheAnalysis(BaseModel):
     recommended_ttl_seconds: int = Field(
         ge=0, description="Recommended TTL based on query patterns"
     )
-    suggested_optimizations: List[str] = Field(
+    suggested_optimizations: list[str] = Field(
         default_factory=list, description="List of optimization suggestions"
     )
     confidence: float = Field(ge=0.0, le=1.0, description="Confidence in the analysis")
@@ -57,13 +58,11 @@ class CacheEntryMetadata(BaseModel):
 
     entry_key: str = Field(description="Unique cache entry identifier")
     created_at: datetime = Field(description="When entry was created")
-    last_accessed: Optional[datetime] = Field(
-        default=None, description="Last access time"
-    )
+    last_accessed: datetime | None = Field(default=None, description="Last access time")
     access_count: int = Field(ge=0, description="Number of times accessed")
     tier: CacheTier = Field(description="Current cache tier")
     size_bytes: int = Field(ge=0, description="Size in bytes")
-    expires_at: Optional[datetime] = Field(default=None, description="Expiration time")
+    expires_at: datetime | None = Field(default=None, description="Expiration time")
     is_expired: bool = Field(description="Whether entry has expired")
     embedding_available: bool = Field(description="If semantic embedding exists")
 
@@ -73,20 +72,12 @@ class CacheHealthReport(BaseModel):
     Health report for cache system.
     """
 
-    status: Literal["healthy", "degraded", "critical"] = Field(
-        description="Overall health status"
-    )
+    status: Literal["healthy", "degraded", "critical"] = Field(description="Overall health status")
     hit_rate: float = Field(ge=0.0, le=1.0, description="Current hit rate")
     avg_response_time_ms: float = Field(ge=0.0, description="Average response time")
-    memory_usage_percent: float = Field(
-        ge=0.0, le=100.0, description="Memory usage percentage"
-    )
-    issues: List[str] = Field(
-        default_factory=list, description="List of identified issues"
-    )
-    recommendations: List[str] = Field(
-        default_factory=list, description="List of recommendations"
-    )
+    memory_usage_percent: float = Field(ge=0.0, le=100.0, description="Memory usage percentage")
+    issues: list[str] = Field(default_factory=list, description="List of identified issues")
+    recommendations: list[str] = Field(default_factory=list, description="List of recommendations")
 
 
 class CacheQueryRequest(BaseModel):
@@ -95,9 +86,7 @@ class CacheQueryRequest(BaseModel):
     """
 
     query: str = Field(description="The query to look up")
-    context: Optional[Dict[str, Any]] = Field(
-        default=None, description="Optional context dictionary"
-    )
+    context: dict[str, Any] | None = Field(default=None, description="Optional context dictionary")
     enable_semantic: bool = Field(default=True, description="Enable semantic matching")
     threshold: float = Field(
         ge=0.0,
@@ -113,21 +102,15 @@ class CacheQueryResponse(BaseModel):
     """
 
     hit: bool = Field(description="Whether cache hit occurred")
-    hit_type: Optional[CacheHitType] = Field(
-        default=None, description="Type of hit if applicable"
-    )
-    value: Optional[str] = Field(default=None, description="Cached response value")
-    confidence: Optional[float] = Field(
+    hit_type: CacheHitType | None = Field(default=None, description="Type of hit if applicable")
+    value: str | None = Field(default=None, description="Cached response value")
+    confidence: float | None = Field(
         default=None, ge=0.0, le=1.0, description="Confidence in semantic match"
     )
-    cache_key: Optional[str] = Field(default=None, description="Cache key used")
+    cache_key: str | None = Field(default=None, description="Cache key used")
     latency_ms: float = Field(ge=0.0, description="Query latency in ms")
-    tokens_saved: Optional[int] = Field(
-        default=None, ge=0, description="Tokens saved from cache"
-    )
-    cost_saved: Optional[float] = Field(
-        default=None, ge=0.0, description="Cost saved from cache"
-    )
+    tokens_saved: int | None = Field(default=None, ge=0, description="Tokens saved from cache")
+    cost_saved: float | None = Field(default=None, ge=0.0, description="Cost saved from cache")
 
 
 class CacheStatsReport(BaseModel):
@@ -166,14 +149,12 @@ class CacheWarmupPlan(BaseModel):
     Plan for cache warming operations.
     """
 
-    priority_queries: List[str] = Field(description="High-priority queries to warm")
+    priority_queries: list[str] = Field(description="High-priority queries to warm")
     estimated_time_seconds: float = Field(ge=0.0, description="Estimated warming time")
     expected_hit_rate_after_warmup: float = Field(
         ge=0.0, le=1.0, description="Expected hit rate after warming"
     )
-    concurrent_warmup_limit: int = Field(
-        ge=1, description="Max concurrent warmup operations"
-    )
+    concurrent_warmup_limit: int = Field(ge=1, description="Max concurrent warmup operations")
 
 
 class InvalidationPattern(BaseModel):
@@ -194,13 +175,11 @@ class MultiProviderCacheStatus(BaseModel):
     Status of multi-provider caching (2026).
     """
 
-    providers: Dict[str, bool] = Field(description="Provider availability status")
+    providers: dict[str, bool] = Field(description="Provider availability status")
     active_provider: str = Field(description="Currently active provider")
     failover_enabled: bool = Field(description="Whether automatic failover is enabled")
-    total_cost_saved: float = Field(
-        ge=0.0, description="Total cost saved across providers"
-    )
-    provider_savings: Dict[str, float] = Field(description="Savings per provider")
+    total_cost_saved: float = Field(ge=0.0, description="Total cost saved across providers")
+    provider_savings: dict[str, float] = Field(description="Savings per provider")
 
 
 class ContextBuilderConfig(BaseModel):
@@ -225,9 +204,7 @@ class ContextBuilderConfig(BaseModel):
     include_cache_stats: bool = Field(
         default=True, description="Include cache statistics in context"
     )
-    include_recent_history: bool = Field(
-        default=True, description="Include recent query history"
-    )
+    include_recent_history: bool = Field(default=True, description="Include recent query history")
     history_length: int = Field(
         ge=0, le=100, default=10, description="Number of recent queries to include"
     )

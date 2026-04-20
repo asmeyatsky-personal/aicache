@@ -7,13 +7,13 @@ All cache entries are immutable to prevent accidental state corruption.
 
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any
 from enum import Enum
-import hashlib
+from typing import Any
 
 
 class InvalidationStrategy(Enum):
     """Cache invalidation strategies."""
+
     IMMEDIATE = "immediate"
     DELAYED = "delayed"
     CONDITIONAL = "conditional"
@@ -21,6 +21,7 @@ class InvalidationStrategy(Enum):
 
 class EvictionPolicy(Enum):
     """Cache eviction policies."""
+
     LRU = "lru"  # Least Recently Used
     LFU = "lfu"  # Least Frequently Used
     FIFO = "fifo"  # First In First Out
@@ -30,33 +31,33 @@ class EvictionPolicy(Enum):
 @dataclass(frozen=True)
 class CacheMetadata:
     """Immutable metadata for cache entries."""
+
     created_at: datetime
     accessed_count: int = 0
-    last_accessed_at: Optional[datetime] = None
-    normalized_query: Optional[str] = None
-    semantic_tags: Optional[List[str]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    last_accessed_at: datetime | None = None
+    normalized_query: str | None = None
+    semantic_tags: list[str] | None = None
+    metadata: dict[str, Any] | None = None
 
     def __post_init__(self):
         if self.semantic_tags is None:
-            object.__setattr__(self, 'semantic_tags', [])
+            object.__setattr__(self, "semantic_tags", [])
         if self.metadata is None:
-            object.__setattr__(self, 'metadata', {})
+            object.__setattr__(self, "metadata", {})
 
-    def touch(self) -> 'CacheMetadata':
+    def touch(self) -> "CacheMetadata":
         """Record access without mutation."""
         return replace(
-            self,
-            accessed_count=self.accessed_count + 1,
-            last_accessed_at=datetime.now()
+            self, accessed_count=self.accessed_count + 1, last_accessed_at=datetime.now()
         )
 
 
 @dataclass(frozen=True)
 class CachePolicy:
     """Immutable cache policy value object."""
+
     max_size_bytes: int
-    default_ttl_seconds: Optional[int]
+    default_ttl_seconds: int | None
     eviction_policy: EvictionPolicy
     semantic_match_threshold: float = 0.85
     enable_compression: bool = True
@@ -65,9 +66,9 @@ class CachePolicy:
     def validate(self) -> bool:
         """Validate policy constraints."""
         return (
-            self.max_size_bytes > 0 and
-            self.semantic_match_threshold > 0 and
-            self.semantic_match_threshold <= 1.0
+            self.max_size_bytes > 0
+            and self.semantic_match_threshold > 0
+            and self.semantic_match_threshold <= 1.0
         )
 
 
@@ -84,14 +85,15 @@ class CacheEntry:
     - value cannot be empty
     - expires_at must be after created_at if set
     """
+
     key: str
     value: bytes
     created_at: datetime
-    expires_at: Optional[datetime] = None
-    embedding: Optional[List[float]] = None
-    metadata: Optional[CacheMetadata] = None
-    ttl_seconds: Optional[int] = None
-    context: Optional[Dict[str, Any]] = None
+    expires_at: datetime | None = None
+    embedding: list[float] | None = None
+    metadata: CacheMetadata | None = None
+    ttl_seconds: int | None = None
+    context: dict[str, Any] | None = None
 
     def __post_init__(self):
         """Validate invariants."""
@@ -100,11 +102,7 @@ class CacheEntry:
         if not self.value:
             raise ValueError("Cache value cannot be empty")
         if self.metadata is None:
-            object.__setattr__(
-                self,
-                'metadata',
-                CacheMetadata(created_at=self.created_at)
-            )
+            object.__setattr__(self, "metadata", CacheMetadata(created_at=self.created_at))
         if self.expires_at and self.expires_at <= self.created_at:
             raise ValueError("Expiration time must be after creation time")
 
@@ -114,20 +112,17 @@ class CacheEntry:
             return False
         return datetime.now() >= self.expires_at
 
-    def touch(self) -> 'CacheEntry':
+    def touch(self) -> "CacheEntry":
         """Record access without mutation."""
         if self.metadata is None:
             return self
         return replace(self, metadata=self.metadata.touch())
 
-    def refresh_ttl(self) -> 'CacheEntry':
+    def refresh_ttl(self) -> "CacheEntry":
         """Refresh expiration time based on TTL."""
         if self.ttl_seconds is None:
             return self
-        return replace(
-            self,
-            expires_at=datetime.now() + timedelta(seconds=self.ttl_seconds)
-        )
+        return replace(self, expires_at=datetime.now() + timedelta(seconds=self.ttl_seconds))
 
     def get_size_bytes(self) -> int:
         """Estimate memory size of cache entry."""
@@ -141,6 +136,7 @@ class CacheEntry:
 @dataclass(frozen=True)
 class CacheInvalidationEvent:
     """Domain event for cache invalidation."""
+
     cache_key: str
     reason: str
     triggered_by: str
@@ -156,6 +152,7 @@ class CacheInvalidationEvent:
 @dataclass(frozen=True)
 class SemanticMatch:
     """Result of semantic similarity matching."""
+
     similarity_score: float
     matched_entry_key: str
     confidence: float
@@ -170,21 +167,30 @@ class SemanticMatch:
 @dataclass(frozen=True)
 class CacheResult:
     """Result of cache query operation."""
+
     hit: bool
-    value: Optional[bytes] = None
-    entry_key: Optional[str] = None
-    similarity_score: Optional[float] = None
-    confidence: Optional[float] = None
+    value: bytes | None = None
+    entry_key: str | None = None
+    similarity_score: float | None = None
+    confidence: float | None = None
     response_time_ms: float = 0.0
 
     @classmethod
-    def create_hit(cls, value: bytes, entry_key: str, response_time_ms: float = 0.0) -> 'CacheResult':
+    def create_hit(
+        cls, value: bytes, entry_key: str, response_time_ms: float = 0.0
+    ) -> "CacheResult":
         """Create a cache hit result."""
         return cls(hit=True, value=value, entry_key=entry_key, response_time_ms=response_time_ms)
 
     @classmethod
-    def create_semantic_hit(cls, value: bytes, entry_key: str, similarity_score: float,
-                            confidence: float, response_time_ms: float = 0.0) -> 'CacheResult':
+    def create_semantic_hit(
+        cls,
+        value: bytes,
+        entry_key: str,
+        similarity_score: float,
+        confidence: float,
+        response_time_ms: float = 0.0,
+    ) -> "CacheResult":
         """Create a semantic cache hit result."""
         return cls(
             hit=True,
@@ -192,11 +198,11 @@ class CacheResult:
             entry_key=entry_key,
             similarity_score=similarity_score,
             confidence=confidence,
-            response_time_ms=response_time_ms
+            response_time_ms=response_time_ms,
         )
 
     @classmethod
-    def create_miss(cls, response_time_ms: float = 0.0) -> 'CacheResult':
+    def create_miss(cls, response_time_ms: float = 0.0) -> "CacheResult":
         """Create a cache miss result."""
         return cls(hit=False, response_time_ms=response_time_ms)
 
@@ -204,6 +210,7 @@ class CacheResult:
 @dataclass(frozen=True)
 class TokenUsageMetrics:
     """Immutable token usage metrics."""
+
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
@@ -217,6 +224,7 @@ class TokenUsageMetrics:
 @dataclass(frozen=True)
 class CacheMetrics:
     """Immutable aggregate cache metrics."""
+
     total_hits: int
     total_misses: int
     total_evictions: int

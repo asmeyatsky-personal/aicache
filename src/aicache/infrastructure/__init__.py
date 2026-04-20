@@ -1,23 +1,23 @@
 """Infrastructure layer: Adapter implementations for external dependencies."""
 
 from .adapters import (
-    InMemoryStorageAdapter,
     FileSystemStorageAdapter,
-    SimpleQueryNormalizerAdapter,
-    OpenAITokenCounterAdapter,
-    InMemoryEventPublisherAdapter,
     InMemoryCacheMetricsAdapter,
-    SimpleSemanticIndexAdapter,
+    InMemoryEventPublisherAdapter,
+    InMemoryStorageAdapter,
+    OpenAITokenCounterAdapter,
     SimpleEmbeddingGeneratorAdapter,
+    SimpleQueryNormalizerAdapter,
+    SimpleSemanticIndexAdapter,
 )
 
 __all__ = [
-    "InMemoryStorageAdapter",
     "FileSystemStorageAdapter",
-    "SimpleQueryNormalizerAdapter",
-    "OpenAITokenCounterAdapter",
-    "InMemoryEventPublisherAdapter",
     "InMemoryCacheMetricsAdapter",
-    "SimpleSemanticIndexAdapter",
+    "InMemoryEventPublisherAdapter",
+    "InMemoryStorageAdapter",
+    "OpenAITokenCounterAdapter",
     "SimpleEmbeddingGeneratorAdapter",
+    "SimpleQueryNormalizerAdapter",
+    "SimpleSemanticIndexAdapter",
 ]

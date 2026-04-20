@@ -11,15 +11,16 @@ Every cache operation produces a TOON object that captures:
 This module defines immutable TOON domain models following DDD principles.
 """
 
-from dataclasses import dataclass, replace
-from datetime import datetime
-from typing import Optional, List, Dict, Any
-from enum import Enum
 import json
+from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
+from typing import Any
 
 
 class TOONOperationType(Enum):
     """Type of cache operation captured by TOON."""
+
     EXACT_HIT = "exact_hit"  # Exact match cache hit
     SEMANTIC_HIT = "semantic_hit"  # Semantic similarity match
     INTENT_HIT = "intent_hit"  # Intent-based match
@@ -30,6 +31,7 @@ class TOONOperationType(Enum):
 
 class TOONOptimizationLevel(Enum):
     """Overall optimization effectiveness level."""
+
     CRITICAL = "critical"  # Very high savings opportunity
     HIGH = "high"  # Significant savings
     MEDIUM = "medium"  # Moderate savings
@@ -39,6 +41,7 @@ class TOONOptimizationLevel(Enum):
 
 class TOONStrategy(Enum):
     """Cache matching strategy used."""
+
     EXACT = "exact"  # Exact key match with normalization
     SEMANTIC = "semantic"  # Semantic similarity matching
     INTENT = "intent"  # Intent-based matching
@@ -48,12 +51,13 @@ class TOONStrategy(Enum):
 @dataclass(frozen=True)
 class TOONQueryMetadata:
     """Immutable query metadata for TOON."""
+
     original_query: str
     normalized_query: str
     query_hash: str
-    embedding_dimension: Optional[int] = None
-    intent: Optional[str] = None
-    semantic_tags: Optional[List[str]] = None
+    embedding_dimension: int | None = None
+    intent: str | None = None
+    semantic_tags: list[str] | None = None
 
     def __post_init__(self):
         if not self.original_query:
@@ -67,6 +71,7 @@ class TOONQueryMetadata:
 @dataclass(frozen=True)
 class TOONTokenDelta:
     """Immutable representation of token usage delta."""
+
     without_cache_prompt: int
     without_cache_completion: int
     without_cache_total: int
@@ -94,12 +99,13 @@ class TOONTokenDelta:
 @dataclass(frozen=True)
 class TOONSemanticMatchData:
     """Immutable semantic match decision data."""
+
     enabled: bool
-    similarity_score: Optional[float]
-    confidence: Optional[float]
-    matched_entry_key: Optional[str]
-    semantic_distance: Optional[float]
-    embedding_dimension: Optional[int]
+    similarity_score: float | None
+    confidence: float | None
+    matched_entry_key: str | None
+    semantic_distance: float | None
+    embedding_dimension: int | None
     similarity_threshold_used: float
     threshold_met: bool
 
@@ -115,11 +121,12 @@ class TOONSemanticMatchData:
 @dataclass(frozen=True)
 class TOONCacheMetadata:
     """Immutable cache entry metadata snapshot for TOON."""
+
     cache_key: str
     cache_age_seconds: float
-    ttl_remaining_seconds: Optional[float]
+    ttl_remaining_seconds: float | None
     access_count: int
-    last_accessed: Optional[datetime]
+    last_accessed: datetime | None
     created_at: datetime
     memory_size_bytes: int
     eviction_policy: str
@@ -136,9 +143,10 @@ class TOONCacheMetadata:
 @dataclass(frozen=True)
 class TOONOptimizationInsight:
     """Immutable optimization insights and recommendations."""
+
     optimization_level: TOONOptimizationLevel
     roi_score: float
-    suggested_actions: List[str]
+    suggested_actions: list[str]
     eviction_risk: str
     cache_efficiency_score: float
     predictability_score: float
@@ -157,6 +165,7 @@ class TOONOptimizationInsight:
 @dataclass(frozen=True)
 class TOONCacheOperation:
     """Immutable representation of a single cache operation with full optimization context."""
+
     # Operation metadata
     operation_id: str
     timestamp: datetime
@@ -180,8 +189,8 @@ class TOONCacheOperation:
     optimization_insight: TOONOptimizationInsight
 
     # Optional context
-    context: Optional[Dict[str, Any]] = None
-    error_message: Optional[str] = None
+    context: dict[str, Any] | None = None
+    error_message: str | None = None
 
     def __post_init__(self):
         if not self.operation_id:
@@ -189,7 +198,7 @@ class TOONCacheOperation:
         if self.duration_ms < 0:
             raise ValueError("Duration cannot be negative")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert TOON to dictionary representation."""
         return {
             "version": "1.0",
@@ -232,19 +241,29 @@ class TOONCacheOperation:
             },
             "semantic_match": {
                 "enabled": self.semantic_data.enabled,
-                "similarity_score": round(self.semantic_data.similarity_score, 4) if self.semantic_data.similarity_score else None,
-                "confidence": round(self.semantic_data.confidence, 4) if self.semantic_data.confidence else None,
+                "similarity_score": round(self.semantic_data.similarity_score, 4)
+                if self.semantic_data.similarity_score
+                else None,
+                "confidence": round(self.semantic_data.confidence, 4)
+                if self.semantic_data.confidence
+                else None,
                 "matched_entry_key": self.semantic_data.matched_entry_key,
-                "semantic_distance": round(self.semantic_data.semantic_distance, 4) if self.semantic_data.semantic_distance else None,
+                "semantic_distance": round(self.semantic_data.semantic_distance, 4)
+                if self.semantic_data.semantic_distance
+                else None,
                 "threshold_used": self.semantic_data.similarity_threshold_used,
                 "threshold_met": self.semantic_data.threshold_met,
             },
             "cache_metadata": {
                 "cache_key": self.cache_metadata.cache_key,
                 "cache_age_seconds": round(self.cache_metadata.cache_age_seconds, 2),
-                "ttl_remaining_seconds": round(self.cache_metadata.ttl_remaining_seconds, 2) if self.cache_metadata.ttl_remaining_seconds else None,
+                "ttl_remaining_seconds": round(self.cache_metadata.ttl_remaining_seconds, 2)
+                if self.cache_metadata.ttl_remaining_seconds
+                else None,
                 "access_count": self.cache_metadata.access_count,
-                "last_accessed": self.cache_metadata.last_accessed.isoformat() if self.cache_metadata.last_accessed else None,
+                "last_accessed": self.cache_metadata.last_accessed.isoformat()
+                if self.cache_metadata.last_accessed
+                else None,
                 "created_at": self.cache_metadata.created_at.isoformat(),
                 "memory_size_bytes": self.cache_metadata.memory_size_bytes,
                 "eviction_policy": self.cache_metadata.eviction_policy,
@@ -254,7 +273,9 @@ class TOONCacheOperation:
                 "roi_score": round(self.optimization_insight.roi_score, 4),
                 "suggested_actions": self.optimization_insight.suggested_actions,
                 "eviction_risk": self.optimization_insight.eviction_risk,
-                "cache_efficiency_score": round(self.optimization_insight.cache_efficiency_score, 4),
+                "cache_efficiency_score": round(
+                    self.optimization_insight.cache_efficiency_score, 4
+                ),
                 "predictability_score": round(self.optimization_insight.predictability_score, 4),
                 "pattern_detected": self.optimization_insight.pattern_detected,
                 "similar_queries_found": self.optimization_insight.similar_queries_found,
@@ -267,7 +288,7 @@ class TOONCacheOperation:
         """Serialize TOON to JSON string."""
         return json.dumps(self.to_dict(), indent=2)
 
-    def to_compact_dict(self) -> Dict[str, Any]:
+    def to_compact_dict(self) -> dict[str, Any]:
         """Convert to compact representation for storage efficiency."""
         return {
             "v": "1.0",
@@ -282,7 +303,9 @@ class TOONCacheOperation:
             "tok_saved": self.token_delta.saved_total,
             "tok_pct": round(self.token_delta.saved_percent, 1),
             "cost_saved": round(self.token_delta.cost_saved, 6),
-            "sem_score": round(self.semantic_data.similarity_score, 2) if self.semantic_data.similarity_score else None,
+            "sem_score": round(self.semantic_data.similarity_score, 2)
+            if self.semantic_data.similarity_score
+            else None,
             "opt_level": self.optimization_insight.optimization_level.value,
             "roi": round(self.optimization_insight.roi_score, 2),
         }
@@ -291,6 +314,7 @@ class TOONCacheOperation:
 @dataclass(frozen=True)
 class TOONAnalytics:
     """Immutable aggregated TOON analytics."""
+
     total_operations: int
     exact_hits: int
     semantic_hits: int
@@ -300,7 +324,7 @@ class TOONAnalytics:
     total_cost_saved: float
     average_token_savings_percent: float
     average_roi_score: float
-    operations: List[TOONCacheOperation]
+    operations: list[TOONCacheOperation]
     time_period_start: datetime
     time_period_end: datetime
     cache_efficiency_trend: float  # -1.0 to 1.0
@@ -326,7 +350,7 @@ class TOONAnalytics:
             return 0.0
         return (self.semantic_hits / self.total_operations) * 100
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "version": "1.0",

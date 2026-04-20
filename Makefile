@@ -1,43 +1,43 @@
 VENV_DIR := venv
 PYTHON := $(VENV_DIR)/bin/python
+PIP := $(VENV_DIR)/bin/pip
 
-.PHONY: install install-wrappers setup test clean
+.PHONY: venv install dev lint format type arch test coverage audit ci clean
 
 venv:
 	test -d $(VENV_DIR) || python3 -m venv $(VENV_DIR)
 
-install:
-	$(PYTHON) -m pip install .
+install: venv
+	$(PIP) install -e .
 
-install-wrappers:
-	mkdir -p ~/.local/bin
-	cp $(VENV_DIR)/bin/aicache ~/.local/bin/gcloud
-	cp $(VENV_DIR)/bin/aicache ~/.local/bin/llm
-	cp $(VENV_DIR)/bin/aicache ~/.local/bin/openai
-	cp custom_wrappers/claude ~/.local/bin/claude
-	cp custom_wrappers/gemini ~/.local/bin/gemini
-	cp custom_wrappers/qwen ~/.local/bin/qwen
-	chmod +x ~/.local/bin/claude ~/.local/bin/gemini ~/.local/bin/qwen
-	@echo "Wrapper scripts installed in ~/.local/bin"
-	@echo "Please ensure ~/.local/bin is in your PATH and has precedence."
+dev: venv
+	$(PIP) install -e ".[dev]"
 
-setup: install install-wrappers
+lint:
+	$(VENV_DIR)/bin/ruff check .
+	$(VENV_DIR)/bin/ruff format --check .
 
-test: venv
-	$(PYTHON) -m pip install -e .
-	$(PYTHON) -m pip install pytest-asyncio
-	$(PYTHON) -m pytest tests/test_core.py tests/test_cli_wrappers.py tests/test_cli.py -v
+format:
+	$(VENV_DIR)/bin/ruff check --fix .
+	$(VENV_DIR)/bin/ruff format .
 
-test-all: venv
-	$(PYTHON) -m pip install -e .
-	$(PYTHON) -m pip install pytest-asyncio
-	$(PYTHON) -m pytest tests/ -v
+type:
+	$(VENV_DIR)/bin/mypy src/aicache/domain src/aicache/application
 
-test-feature: venv
-	$(PYTHON) -m pip install -e .
-	$(PYTHON) -m python -m pytest tests/test_core.py tests/test_cli_wrappers.py -v
-	@echo "Running feature tests separately..."
-	@echo "To run feature tests, use: cd tests/feature_tests && python test_suite.py"
+arch:
+	$(VENV_DIR)/bin/lint-imports
+
+test:
+	$(PYTHON) -m pytest
+
+coverage:
+	$(PYTHON) -m pytest --cov --cov-report=term-missing
+
+audit:
+	$(VENV_DIR)/bin/pip-audit
+
+ci: lint arch coverage
+	@echo "Skipping strict mypy — warn-only in Phase 0; run \`make type\` to see current errors."
 
 clean:
-	rm -rf build dist *.egg-info .aicache .pytest_cache test_project test_project_cli $(VENV_DIR)
+	rm -rf build dist *.egg-info .aicache .pytest_cache .ruff_cache .mypy_cache .coverage

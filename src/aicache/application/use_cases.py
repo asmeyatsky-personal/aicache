@@ -7,20 +7,26 @@ Each use case represents a single business operation.
 
 import logging
 import time
-from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
+from typing import Any
 
-from ..domain.models import (
-    CacheEntry, CacheMetadata, CachePolicy, CacheResult,
-    TokenUsageMetrics
-)
+from ..domain.models import CacheEntry, CacheMetadata, CachePolicy, CacheResult
 from ..domain.ports import (
-    StoragePort, SemanticIndexPort, TokenCounterPort, QueryNormalizerPort,
-    EmbeddingGeneratorPort, EventPublisherPort, CacheMetricsPort
+    CacheMetricsPort,
+    EmbeddingGeneratorPort,
+    EventPublisherPort,
+    QueryNormalizerPort,
+    SemanticIndexPort,
+    StoragePort,
+    TokenCounterPort,
 )
 from ..domain.services import (
-    QueryNormalizationService, TokenCountingService, SemanticCachingService,
-    CacheEvictionService, CacheInvalidationService, CacheTTLService
+    CacheEvictionService,
+    CacheInvalidationService,
+    CacheTTLService,
+    QueryNormalizationService,
+    SemanticCachingService,
+    TokenCountingService,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,7 +51,7 @@ class QueryCacheUseCase:
         query_normalizer: QueryNormalizerPort,
         embedding_generator: EmbeddingGeneratorPort,
         metrics: CacheMetricsPort,
-        cache_policy: CachePolicy
+        cache_policy: CachePolicy,
     ):
         self.storage = storage
         self.semantic_caching = SemanticCachingService(semantic_index, embedding_generator)
@@ -55,7 +61,7 @@ class QueryCacheUseCase:
         self.policy = cache_policy
         self.ttl_service = CacheTTLService()
 
-    async def execute(self, query: str, context: Optional[Dict[str, Any]] = None) -> CacheResult:
+    async def execute(self, query: str, context: dict[str, Any] | None = None) -> CacheResult:
         """Execute cache query."""
         start_time = time.time()
 
@@ -65,12 +71,11 @@ class QueryCacheUseCase:
             if exact_result.hit:
                 response_time_ms = (time.time() - start_time) * 1000
                 await self.metrics.record_hit(
-                    exact_result.entry_key or "",
-                    response_time_ms,
-                    tokens_saved=0,
-                    cost_saved=0.0
+                    exact_result.entry_key or "", response_time_ms, tokens_saved=0, cost_saved=0.0
                 )
-                return CacheResult.create_hit(exact_result.value, exact_result.entry_key, response_time_ms)
+                return CacheResult.create_hit(
+                    exact_result.value, exact_result.entry_key, response_time_ms
+                )
 
             # Step 2: Try semantic match if enabled
             if self.policy.enable_semantic_caching:
@@ -81,7 +86,7 @@ class QueryCacheUseCase:
                         semantic_result.entry_key or "",
                         response_time_ms,
                         tokens_saved=0,
-                        cost_saved=0.0
+                        cost_saved=0.0,
                     )
                     return semantic_result
 
@@ -94,7 +99,7 @@ class QueryCacheUseCase:
             logger.error(f"Error querying cache: {e}")
             return CacheResult.create_miss((time.time() - start_time) * 1000)
 
-    async def _try_exact_match(self, query: str, context: Optional[Dict[str, Any]]) -> CacheResult:
+    async def _try_exact_match(self, query: str, context: dict[str, Any] | None) -> CacheResult:
         """Try to find exact cache match."""
         # Generate normalized query key
         normalized_query = self.query_normalization.normalizer.normalize(query)
@@ -118,8 +123,7 @@ class QueryCacheUseCase:
     async def _try_semantic_match(self, query: str) -> CacheResult:
         """Try to find semantic match."""
         semantic_match = await self.semantic_caching.find_applicable_cache(
-            query,
-            self.policy.semantic_match_threshold
+            query, self.policy.semantic_match_threshold
         )
 
         if not semantic_match:
@@ -138,21 +142,21 @@ class QueryCacheUseCase:
             entry.value,
             semantic_match.matched_entry_key,
             semantic_match.similarity_score,
-            semantic_match.confidence
+            semantic_match.confidence,
         )
 
     @staticmethod
-    def _generate_cache_key(query: str, context: Optional[Dict[str, Any]]) -> str:
+    def _generate_cache_key(query: str, context: dict[str, Any] | None) -> str:
         """Generate deterministic cache key."""
         import hashlib
         import json
 
         hasher = hashlib.sha256()
-        hasher.update(query.encode('utf-8'))
+        hasher.update(query.encode("utf-8"))
 
         if context:
             sorted_context = json.dumps(context, sort_keys=True)
-            hasher.update(sorted_context.encode('utf-8'))
+            hasher.update(sorted_context.encode("utf-8"))
 
         return hasher.hexdigest()
 
@@ -174,7 +178,7 @@ class StoreCacheUseCase:
         semantic_index: SemanticIndexPort,
         embedding_generator: EmbeddingGeneratorPort,
         metrics: CacheMetricsPort,
-        cache_policy: CachePolicy
+        cache_policy: CachePolicy,
     ):
         self.storage = storage
         self.semantic_caching = SemanticCachingService(semantic_index, embedding_generator)
@@ -186,8 +190,8 @@ class StoreCacheUseCase:
         self,
         key: str,
         value: bytes,
-        ttl_seconds: Optional[int] = None,
-        context: Optional[Dict[str, Any]] = None
+        ttl_seconds: int | None = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         """Store cache entry."""
         try:
@@ -207,7 +211,7 @@ class StoreCacheUseCase:
                 created_at=now,
                 accessed_count=0,
                 normalized_query=key,
-                metadata={"context": context} if context else {}
+                metadata={"context": context} if context else {},
             )
 
             entry = CacheEntry(
@@ -217,7 +221,7 @@ class StoreCacheUseCase:
                 expires_at=expires_at,
                 ttl_seconds=ttl_seconds,
                 metadata=metadata,
-                context=context
+                context=context,
             )
 
             # Store entry
@@ -243,12 +247,10 @@ class InvalidateCacheUseCase:
         storage: StoragePort,
         semantic_index: SemanticIndexPort,
         event_publisher: EventPublisherPort,
-        metrics: CacheMetricsPort
+        metrics: CacheMetricsPort,
     ):
         self.invalidation_service = CacheInvalidationService(
-            storage,
-            semantic_index,
-            event_publisher
+            storage, semantic_index, event_publisher
         )
         self.metrics = metrics
 
@@ -271,7 +273,7 @@ class CacheMetricsUseCase:
     def __init__(self, metrics: CacheMetricsPort):
         self.metrics = metrics
 
-    async def get_metrics(self) -> Dict[str, Any]:
+    async def get_metrics(self) -> dict[str, Any]:
         """Get cache metrics."""
         return await self.metrics.get_metrics()
 

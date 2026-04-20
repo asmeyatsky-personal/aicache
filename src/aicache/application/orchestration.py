@@ -6,10 +6,11 @@ DAG-based orchestration for multi-step workflows with automatic parallelization.
 """
 
 import asyncio
-from dataclasses import dataclass, field
-from typing import Callable, Any, Dict, List, Optional, Set
-from enum import Enum
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +34,9 @@ class WorkflowStep:
 
     name: str
     execute: Callable[..., Any]
-    depends_on: List[str] = field(default_factory=list)
+    depends_on: list[str] = field(default_factory=list)
     is_critical: bool = True
-    timeout_seconds: Optional[float] = None
+    timeout_seconds: float | None = None
     retry_count: int = 0
 
     def __post_init__(self):
@@ -50,7 +51,7 @@ class StepResult:
     step_name: str
     status: WorkflowStatus
     result: Any = None
-    error: Optional[Exception] = None
+    error: Exception | None = None
     duration_ms: float = 0.0
 
 
@@ -62,16 +63,16 @@ class DAGOrchestrator:
     Uses asyncio.gather for concurrent execution of ready steps.
     """
 
-    def __init__(self, steps: List[WorkflowStep]):
-        self.steps: Dict[str, WorkflowStep] = {s.name: s for s in steps}
+    def __init__(self, steps: list[WorkflowStep]):
+        self.steps: dict[str, WorkflowStep] = {s.name: s for s in steps}
         self._validate_dag()
         self._backpressure_limit = 10
-        self._semaphore: Optional[asyncio.Semaphore] = None
+        self._semaphore: asyncio.Semaphore | None = None
 
     def _validate_dag(self) -> None:
         """Validate DAG has no cycles."""
-        visited: Set[str] = set()
-        rec_stack: Set[str] = set()
+        visited: set[str] = set()
+        rec_stack: set[str] = set()
 
         def has_cycle(node: str) -> bool:
             visited.add(node)
@@ -92,21 +93,17 @@ class DAGOrchestrator:
         for step_name in self.steps:
             if step_name not in visited:
                 if has_cycle(step_name):
-                    raise ValueError(
-                        f"Circular dependency detected involving {step_name}"
-                    )
+                    raise ValueError(f"Circular dependency detected involving {step_name}")
 
-    def _get_ready_steps(self, pending: Set[str], completed: Set[str]) -> List[str]:
+    def _get_ready_steps(self, pending: set[str], completed: set[str]) -> list[str]:
         """Find all steps whose dependencies are satisfied."""
         return [
-            name
-            for name in pending
-            if all(dep in completed for dep in self.steps[name].depends_on)
+            name for name in pending if all(dep in completed for dep in self.steps[name].depends_on)
         ]
 
     async def execute(
-        self, context: Dict[str, Any], initial_data: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        self, context: dict[str, Any], initial_data: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """
         Execute workflow with parallelization.
 
@@ -115,20 +112,19 @@ class DAGOrchestrator:
         """
         self._semaphore = asyncio.Semaphore(self._backpressure_limit)
 
-        completed: Dict[str, Any] = {}
+        completed: dict[str, Any] = {}
         if initial_data:
             completed.update(initial_data)
 
-        pending: Set[str] = set(self.steps.keys())
-        results: Dict[str, StepResult] = {}
+        pending: set[str] = set(self.steps.keys())
+        results: dict[str, StepResult] = {}
 
         while pending:
             ready = self._get_ready_steps(pending, set(completed.keys()))
 
             if not ready:
                 raise RuntimeError(
-                    f"Deadlock: no ready steps but {len(pending)} pending. "
-                    f"Pending: {pending}"
+                    f"Deadlock: no ready steps but {len(pending)} pending. Pending: {pending}"
                 )
 
             logger.info(f"Executing {len(ready)} steps in parallel: {ready}")
@@ -138,7 +134,7 @@ class DAGOrchestrator:
 
             step_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            for name, result in zip(ready, step_results):
+            for name, result in zip(ready, step_results, strict=False):
                 if isinstance(result, Exception):
                     step = self.steps[name]
                     if step.is_critical:
@@ -158,7 +154,7 @@ class DAGOrchestrator:
         return completed
 
     async def _execute_step(
-        self, name: str, context: Dict[str, Any], completed: Dict[str, Any]
+        self, name: str, context: dict[str, Any], completed: dict[str, Any]
     ) -> StepResult:
         """Execute a single step with timeout and error handling."""
         step = self.steps[name]
@@ -186,11 +182,9 @@ class DAGOrchestrator:
                 duration_ms=duration_ms,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             duration_ms = (asyncio.get_event_loop().time() - start_time) * 1000
-            error = TimeoutError(
-                f"Step '{name}' timed out after {step.timeout_seconds}s"
-            )
+            error = TimeoutError(f"Step '{name}' timed out after {step.timeout_seconds}s")
 
             if step.retry_count > 0:
                 logger.warning(f"Step '{name}' timed out, retrying...")
@@ -231,14 +225,14 @@ class CacheWorkflowOrchestrator:
     """
 
     def __init__(self):
-        self._orchestrator: Optional[DAGOrchestrator] = None
+        self._orchestrator: DAGOrchestrator | None = None
 
     async def warm_cache(
         self,
-        queries: List[str],
+        queries: list[str],
         execute_query_fn: Callable[[str], Any],
         max_concurrency: int = 10,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Warm cache for multiple queries concurrently.
 
@@ -246,14 +240,12 @@ class CacheWorkflowOrchestrator:
         """
         semaphore = asyncio.Semaphore(max_concurrency)
 
-        async def warm_single(query: str) -> Dict[str, Any]:
+        async def warm_single(query: str) -> dict[str, Any]:
             async with semaphore:
                 result = await execute_query_fn(query)
                 return {"query": query, "result": result, "warmed": True}
 
-        results = await asyncio.gather(
-            *[warm_single(q) for q in queries], return_exceptions=True
-        )
+        results = await asyncio.gather(*[warm_single(q) for q in queries], return_exceptions=True)
 
         return {
             "total": len(queries),
@@ -264,10 +256,10 @@ class CacheWorkflowOrchestrator:
 
     async def multi_lookup(
         self,
-        queries: List[str],
+        queries: list[str],
         lookup_fn: Callable[[str], Any],
         max_concurrency: int = 20,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Perform multiple cache lookups in parallel.
 
@@ -275,13 +267,11 @@ class CacheWorkflowOrchestrator:
         """
         semaphore = asyncio.Semaphore(max_concurrency)
 
-        async def lookup_single(query: str) -> Dict[str, Any]:
+        async def lookup_single(query: str) -> dict[str, Any]:
             async with semaphore:
                 return await lookup_fn(query)
 
-        results = await asyncio.gather(
-            *[lookup_single(q) for q in queries], return_exceptions=True
-        )
+        results = await asyncio.gather(*[lookup_single(q) for q in queries], return_exceptions=True)
 
         hits = sum(1 for r in results if not isinstance(r, Exception) and r.get("hit"))
 
@@ -295,16 +285,16 @@ class CacheWorkflowOrchestrator:
 
     async def invalidate_pattern(
         self,
-        patterns: List[str],
+        patterns: list[str],
         invalidate_fn: Callable[[str], Any],
         max_concurrency: int = 10,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Invalidate cache entries matching multiple patterns in parallel.
         """
         semaphore = asyncio.Semaphore(max_concurrency)
 
-        async def invalidate_single(pattern: str) -> Dict[str, Any]:
+        async def invalidate_single(pattern: str) -> dict[str, Any]:
             async with semaphore:
                 result = await invalidate_fn(pattern)
                 return {"pattern": pattern, "invalidated": result}
@@ -334,10 +324,10 @@ class AgentTaskDecomposer:
     async def coordinate_research(
         self,
         query: str,
-        sub_queries: List[str],
+        sub_queries: list[str],
         lookup_fn: Callable[[str], Any],
-        synthesis_fn: Callable[[List[Any]], Any],
-    ) -> Dict[str, Any]:
+        synthesis_fn: Callable[[list[Any]], Any],
+    ) -> dict[str, Any]:
         """
         Phase 1: Parallel research across sub-queries.
 
@@ -354,8 +344,8 @@ class AgentTaskDecomposer:
         }
 
     async def coordinate_validation(
-        self, synthesis_result: Any, validators: List[Callable[[Any], Any]]
-    ) -> Dict[str, Any]:
+        self, synthesis_result: Any, validators: list[Callable[[Any], Any]]
+    ) -> dict[str, Any]:
         """
         Phase 2: Parallel validation.
 
@@ -372,7 +362,7 @@ class AgentTaskDecomposer:
                     "passed": not isinstance(r, Exception),
                     "result": r,
                 }
-                for v, r in zip(validators, results)
+                for v, r in zip(validators, results, strict=False)
             ],
             "all_passed": all(not isinstance(r, Exception) for r in results),
         }

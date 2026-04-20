@@ -1,6 +1,8 @@
-import shutil
 import re
+import shutil
+
 from .base import CLIWrapper
+
 
 class OpenAICLIWrapper(CLIWrapper):
     def get_cli_name(self) -> str:
@@ -14,13 +16,13 @@ class OpenAICLIWrapper(CLIWrapper):
         while i < len(args):
             if args[i] == "--model":
                 if i + 1 < len(args):
-                    model = args[i+1]
+                    model = args[i + 1]
                     i += 2
                 else:
                     i += 1
             elif args[i] == "--messages":
                 if i + 1 < len(args):
-                    messages_str = args[i+1]
+                    messages_str = args[i + 1]
                     match = re.search(r"content='([^']+)'", messages_str)
                     if match:
                         prompt_content = match.group(1)

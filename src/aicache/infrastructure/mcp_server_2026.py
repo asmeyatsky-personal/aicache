@@ -9,33 +9,32 @@ This MCP server exposes cache capabilities following skill2026.md principles:
 """
 
 import logging
-from typing import Any, Dict, Optional, List
-from pathlib import Path
+from typing import Any
 
-from ..domain.ports import (
-    StoragePort,
-    SemanticIndexPort,
-    TokenCounterPort,
-    QueryNormalizerPort,
-    EmbeddingGeneratorPort,
-    EventPublisherPort,
-    CacheMetricsPort,
-)
-from ..domain.models import CachePolicy, EvictionPolicy
 from ..application.use_cases import (
+    CacheMetricsUseCase,
+    InvalidateCacheUseCase,
     QueryCacheUseCase,
     StoreCacheUseCase,
-    InvalidateCacheUseCase,
-    CacheMetricsUseCase,
+)
+from ..domain.models import CachePolicy, EvictionPolicy
+from ..domain.ports import (
+    CacheMetricsPort,
+    EmbeddingGeneratorPort,
+    EventPublisherPort,
+    QueryNormalizerPort,
+    SemanticIndexPort,
+    StoragePort,
+    TokenCounterPort,
 )
 from ..infrastructure.adapters import (
-    InMemoryStorageAdapter,
-    SimpleQueryNormalizerAdapter,
-    OpenAITokenCounterAdapter,
-    InMemoryEventPublisherAdapter,
     InMemoryCacheMetricsAdapter,
-    SimpleSemanticIndexAdapter,
+    InMemoryEventPublisherAdapter,
+    InMemoryStorageAdapter,
+    OpenAITokenCounterAdapter,
     SimpleEmbeddingGeneratorAdapter,
+    SimpleQueryNormalizerAdapter,
+    SimpleSemanticIndexAdapter,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,22 +50,20 @@ class MCPCacheServer:
 
     def __init__(
         self,
-        storage: Optional[StoragePort] = None,
-        semantic_index: Optional[SemanticIndexPort] = None,
-        token_counter: Optional[TokenCounterPort] = None,
-        query_normalizer: Optional[QueryNormalizerPort] = None,
-        embedding_generator: Optional[EmbeddingGeneratorPort] = None,
-        event_publisher: Optional[EventPublisherPort] = None,
-        metrics: Optional[CacheMetricsPort] = None,
+        storage: StoragePort | None = None,
+        semantic_index: SemanticIndexPort | None = None,
+        token_counter: TokenCounterPort | None = None,
+        query_normalizer: QueryNormalizerPort | None = None,
+        embedding_generator: EmbeddingGeneratorPort | None = None,
+        event_publisher: EventPublisherPort | None = None,
+        metrics: CacheMetricsPort | None = None,
     ):
         # Dependency injection with defaults
         self.storage = storage or InMemoryStorageAdapter()
         self.semantic_index = semantic_index or SimpleSemanticIndexAdapter()
         self.token_counter = token_counter or OpenAITokenCounterAdapter()
         self.query_normalizer = query_normalizer or SimpleQueryNormalizerAdapter()
-        self.embedding_generator = (
-            embedding_generator or SimpleEmbeddingGeneratorAdapter()
-        )
+        self.embedding_generator = embedding_generator or SimpleEmbeddingGeneratorAdapter()
         self.event_publisher = event_publisher or InMemoryEventPublisherAdapter()
         self.metrics = metrics or InMemoryCacheMetricsAdapter()
 
@@ -114,9 +111,9 @@ class MCPCacheServer:
         self,
         query: str,
         response: str,
-        context: Optional[Dict[str, Any]] = None,
-        ttl_seconds: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        context: dict[str, Any] | None = None,
+        ttl_seconds: int | None = None,
+    ) -> dict[str, Any]:
         """
         Cache a query-response pair.
 
@@ -141,7 +138,7 @@ class MCPCacheServer:
 
     async def invalidate_cache(
         self, cache_key: str, reason: str = "user_request"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Invalidate a specific cache entry.
 
@@ -151,7 +148,7 @@ class MCPCacheServer:
 
         return {"success": True, "cache_key": cache_key, "reason": reason}
 
-    async def purge_expired(self) -> Dict[str, Any]:
+    async def purge_expired(self) -> dict[str, Any]:
         """
         Purge all expired cache entries.
 
@@ -161,7 +158,7 @@ class MCPCacheServer:
 
         return {"success": True, "purged_count": count}
 
-    async def clear_cache(self, confirm: bool = False) -> Dict[str, Any]:
+    async def clear_cache(self, confirm: bool = False) -> dict[str, Any]:
         """
         Clear all cache entries. Requires confirm=true.
 
@@ -176,7 +173,7 @@ class MCPCacheServer:
 
     # ========== MCP RESOURCES (Read Operations) ==========
 
-    async def get_cache_entry(self, cache_key: str) -> Optional[Dict[str, Any]]:
+    async def get_cache_entry(self, cache_key: str) -> dict[str, Any] | None:
         """
         Get a specific cache entry by key.
 
@@ -196,7 +193,7 @@ class MCPCacheServer:
             "size_bytes": entry.get_size_bytes(),
         }
 
-    async def get_cache_stats(self) -> Dict[str, Any]:
+    async def get_cache_stats(self) -> dict[str, Any]:
         """
         Get cache statistics.
 
@@ -206,8 +203,7 @@ class MCPCacheServer:
         size_bytes = await self.storage.get_size_bytes()
 
         return {
-            "total_entries": metrics.get("total_hits", 0)
-            + metrics.get("total_misses", 0),
+            "total_entries": metrics.get("total_hits", 0) + metrics.get("total_misses", 0),
             "hit_rate": metrics.get("hit_rate", 0.0),
             "total_hits": metrics.get("total_hits", 0),
             "total_misses": metrics.get("total_misses", 0),
@@ -218,7 +214,7 @@ class MCPCacheServer:
 
     async def list_cache_entries(
         self, limit: int = 10, include_expired: bool = False
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         List cache entries.
 
@@ -233,12 +229,8 @@ class MCPCacheServer:
                 entries.append(
                     {
                         "cache_key": entry.key,
-                        "created_at": entry.created_at.isoformat()
-                        if entry.created_at
-                        else None,
-                        "expires_at": entry.expires_at.isoformat()
-                        if entry.expires_at
-                        else None,
+                        "created_at": entry.created_at.isoformat() if entry.created_at else None,
+                        "expires_at": entry.expires_at.isoformat() if entry.expires_at else None,
                         "is_expired": entry.is_expired(),
                         "size_bytes": entry.get_size_bytes(),
                     }
@@ -274,7 +266,7 @@ def create_mcp_cache_server() -> MCPCacheServer:
     return MCPCacheServer()
 
 
-def get_mcp_server_config() -> Dict[str, Any]:
+def get_mcp_server_config() -> dict[str, Any]:
     """
     Return MCP server configuration for registry.
     """

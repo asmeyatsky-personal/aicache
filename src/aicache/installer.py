@@ -2,78 +2,80 @@
 Installation and setup utilities for aicache.
 """
 
+import logging
 import os
 import shutil
-import subprocess
 from pathlib import Path
-from typing import List, Dict, Any
-import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
 class AICacheInstaller:
     """Handles installation and setup of aicache CLI wrappers."""
-    
+
     def __init__(self):
         self.home = Path.home()
         self.local_bin = self.home / ".local" / "bin"
         self.local_bin.mkdir(parents=True, exist_ok=True)
-        
+
         # Common CLI tools to wrap
         self.cli_tools = {
-            'openai': {
-                'description': 'OpenAI CLI wrapper',
-                'check_command': ['openai', '--version'],
-                'wrapper_type': 'openai'
+            "openai": {
+                "description": "OpenAI CLI wrapper",
+                "check_command": ["openai", "--version"],
+                "wrapper_type": "openai",
             },
-            'llm': {
-                'description': 'LLM CLI by Simon Willison',
-                'check_command': ['llm', '--version'],
-                'wrapper_type': 'llm'
+            "llm": {
+                "description": "LLM CLI by Simon Willison",
+                "check_command": ["llm", "--version"],
+                "wrapper_type": "llm",
             },
-            'gcloud': {
-                'description': 'Google Cloud CLI wrapper',
-                'check_command': ['gcloud', 'version'],
-                'wrapper_type': 'gcloud'
-            }
+            "gcloud": {
+                "description": "Google Cloud CLI wrapper",
+                "check_command": ["gcloud", "version"],
+                "wrapper_type": "gcloud",
+            },
         }
-    
+
     def check_tool_available(self, tool_name: str) -> bool:
         """Check if a CLI tool is available in PATH."""
         return shutil.which(tool_name) is not None
-    
+
     def get_aicache_path(self) -> str:
         """Get the path to the aicache executable."""
         # First try to find installed aicache
-        aicache_path = shutil.which('aicache')
+        aicache_path = shutil.which("aicache")
         if aicache_path:
             return aicache_path
-        
+
         # Fall back to python module execution
-        python_path = shutil.which('python3') or shutil.which('python')
+        python_path = shutil.which("python3") or shutil.which("python")
         if python_path:
             return f"{python_path} -m aicache"
-        
+
         raise RuntimeError("Cannot find aicache executable or Python interpreter")
-    
+
     def install_wrapper(self, tool_name: str, force: bool = False) -> bool:
         """Install a CLI wrapper for a specific tool."""
         if tool_name not in self.cli_tools:
             logger.error(f"Unknown CLI tool: {tool_name}")
             return False
-        
-        tool_config = self.cli_tools[tool_name]
+
+        self.cli_tools[tool_name]
         wrapper_path = self.local_bin / tool_name
-        
+
         # Check if wrapper already exists
         if wrapper_path.exists() and not force:
             logger.info(f"Wrapper for {tool_name} already exists. Use --force to overwrite.")
             return True
-        
+
         # Check if original tool exists
         if not self.check_tool_available(tool_name):
-            logger.warning(f"Original {tool_name} CLI not found in PATH. Installing wrapper anyway.")
-        
+            logger.warning(
+                f"Original {tool_name} CLI not found in PATH. Installing wrapper anyway."
+            )
+
         try:
             # Create wrapper script
             aicache_path = self.get_aicache_path()
@@ -87,29 +89,29 @@ export AICACHE_CLI_NAME="{tool_name}"
 # Execute aicache with all arguments
 exec {aicache_path} "$@"
 '''
-            
+
             # Write wrapper
-            with open(wrapper_path, 'w') as f:
+            with open(wrapper_path, "w") as f:
                 f.write(wrapper_content)
-            
+
             # Make executable
             wrapper_path.chmod(0o755)
-            
+
             logger.info(f"✅ Installed {tool_name} wrapper at {wrapper_path}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to install {tool_name} wrapper: {e}")
             return False
-    
+
     def uninstall_wrapper(self, tool_name: str) -> bool:
         """Remove a CLI wrapper."""
         wrapper_path = self.local_bin / tool_name
-        
+
         if not wrapper_path.exists():
             logger.info(f"No wrapper found for {tool_name}")
             return True
-        
+
         try:
             wrapper_path.unlink()
             logger.info(f"✅ Removed {tool_name} wrapper")
@@ -117,11 +119,11 @@ exec {aicache_path} "$@"
         except Exception as e:
             logger.error(f"Failed to remove {tool_name} wrapper: {e}")
             return False
-    
-    def install_all_available(self, force: bool = False) -> Dict[str, bool]:
+
+    def install_all_available(self, force: bool = False) -> dict[str, bool]:
         """Install wrappers for all available CLI tools."""
         results = {}
-        
+
         for tool_name in self.cli_tools:
             if self.check_tool_available(tool_name):
                 results[tool_name] = self.install_wrapper(tool_name, force)
@@ -129,29 +131,31 @@ exec {aicache_path} "$@"
             else:
                 logger.info(f"Skipping {tool_name} (not installed)")
                 results[tool_name] = False
-        
+
         return results
-    
-    def list_wrappers(self) -> List[Dict[str, Any]]:
+
+    def list_wrappers(self) -> list[dict[str, Any]]:
         """List all installed wrappers and their status."""
         wrappers = []
-        
+
         for tool_name, config in self.cli_tools.items():
             wrapper_path = self.local_bin / tool_name
             original_available = self.check_tool_available(tool_name)
             wrapper_installed = wrapper_path.exists()
-            
-            wrappers.append({
-                'name': tool_name,
-                'description': config['description'],
-                'original_available': original_available,
-                'wrapper_installed': wrapper_installed,
-                'wrapper_path': str(wrapper_path) if wrapper_installed else None,
-                'status': self._get_status(original_available, wrapper_installed)
-            })
-        
+
+            wrappers.append(
+                {
+                    "name": tool_name,
+                    "description": config["description"],
+                    "original_available": original_available,
+                    "wrapper_installed": wrapper_installed,
+                    "wrapper_path": str(wrapper_path) if wrapper_installed else None,
+                    "status": self._get_status(original_available, wrapper_installed),
+                }
+            )
+
         return wrappers
-    
+
     def _get_status(self, original_available: bool, wrapper_installed: bool) -> str:
         """Get human-readable status for a wrapper."""
         if wrapper_installed and original_available:
@@ -162,20 +166,20 @@ exec {aicache_path} "$@"
             return "🔧 Available for wrapping"
         else:
             return "❌ Not available"
-    
-    def check_path_setup(self) -> Dict[str, Any]:
+
+    def check_path_setup(self) -> dict[str, Any]:
         """Check if ~/.local/bin is in PATH and provide setup instructions."""
-        path_env = os.environ.get('PATH', '')
+        path_env = os.environ.get("PATH", "")
         local_bin_in_path = str(self.local_bin) in path_env
-        
+
         result = {
-            'local_bin_path': str(self.local_bin),
-            'in_path': local_bin_in_path,
-            'current_path': path_env.split(':')
+            "local_bin_path": str(self.local_bin),
+            "in_path": local_bin_in_path,
+            "current_path": path_env.split(":"),
         }
-        
+
         if not local_bin_in_path:
-            result['setup_instructions'] = [
+            result["setup_instructions"] = [
                 f"Add {self.local_bin} to your PATH by adding this line to your shell profile:",
                 "",
                 "For bash (~/.bashrc or ~/.bash_profile):",
@@ -184,20 +188,20 @@ exec {aicache_path} "$@"
                 "For zsh (~/.zshrc):",
                 f'export PATH="$PATH:{self.local_bin}"',
                 "",
-                "Then restart your terminal or run: source ~/.bashrc (or ~/.zshrc)"
+                "Then restart your terminal or run: source ~/.bashrc (or ~/.zshrc)",
             ]
-        
+
         return result
-    
-    def create_config_file(self, config_path: str = None) -> str:
+
+    def create_config_file(self, config_path: str | None = None) -> str:
         """Create a default configuration file."""
         if config_path is None:
             config_path = str(self.home / ".config" / "aicache" / "config.yaml")
-        
+
         config_dir = Path(config_path).parent
         config_dir.mkdir(parents=True, exist_ok=True)
-        
-        default_config = '''# aicache configuration file
+
+        default_config = """# aicache configuration file
 # Generated by aicache installer
 
 # Cache directory (default: ~/.cache/aicache)
@@ -220,7 +224,7 @@ semantic_cache:
 intelligent_management:
   max_age_days: 30
   max_size_mb: 1000
-  
+
 # LLM service configuration
 llm_service:
   default_provider: "ollama"  # or "openai", "anthropic"
@@ -240,10 +244,10 @@ cli_wrappers:
     enabled: true
   gcloud:
     enabled: true
-'''
-        
-        with open(config_path, 'w') as f:
+"""
+
+        with open(config_path, "w") as f:
             f.write(default_config)
-        
+
         logger.info(f"✅ Created config file at {config_path}")
         return config_path

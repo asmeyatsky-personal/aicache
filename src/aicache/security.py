@@ -7,11 +7,9 @@ This module provides:
 - Basic encryption for sensitive data
 """
 
-import re
 import hashlib
-import base64
-from typing import Dict, Any, Optional, List
-from pathlib import Path
+import re
+from typing import Any
 
 # Default sensitive patterns
 DEFAULT_SENSITIVE_PATTERNS = [
@@ -41,7 +39,7 @@ API_KEY_PATTERNS = [
 class SecurityUtils:
     """Security utilities for input validation and PII handling."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         self.config = config or {}
         self._sensitive_patterns = DEFAULT_SENSITIVE_PATTERNS.copy()
         self._api_patterns = API_KEY_PATTERNS.copy()
@@ -81,7 +79,7 @@ class SecurityUtils:
 
         return text.strip()
 
-    def detect_pii(self, text: str) -> List[Dict[str, Any]]:
+    def detect_pii(self, text: str) -> list[dict[str, Any]]:
         """
         Detect potential PII in text.
 
@@ -205,7 +203,7 @@ class SecurityUtils:
 
         return True
 
-    def validate_context(self, context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def validate_context(self, context: dict[str, Any] | None) -> dict[str, Any]:
         """
         Validate and sanitize context dictionary.
 
@@ -240,9 +238,7 @@ class SecurityUtils:
                 sanitized[key] = self.validate_context(value)
             elif isinstance(value, list):
                 sanitized[key] = [
-                    v
-                    for v in value
-                    if isinstance(v, (str, int, float, bool, type(None)))
+                    v for v in value if isinstance(v, (str, int, float, bool, type(None)))
                 ]
 
         return sanitized
@@ -252,7 +248,7 @@ class SecurityUtils:
 _security_utils = None
 
 
-def get_security_utils(config: Optional[Dict[str, Any]] = None) -> SecurityUtils:
+def get_security_utils(config: dict[str, Any] | None = None) -> SecurityUtils:
     """Get global security utils instance."""
     global _security_utils
     if _security_utils is None:
@@ -265,7 +261,7 @@ def sanitize_input(text: str) -> str:
     return get_security_utils().sanitize_input(text)
 
 
-def detect_pii(text: str) -> List[Dict[str, Any]]:
+def detect_pii(text: str) -> list[dict[str, Any]]:
     """Convenience function for PII detection."""
     return get_security_utils().detect_pii(text)
 
@@ -280,6 +276,6 @@ def is_safe_prompt(prompt: str) -> bool:
     return get_security_utils().is_safe_prompt(prompt)
 
 
-def validate_context(context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def validate_context(context: dict[str, Any] | None) -> dict[str, Any]:
     """Convenience function for context validation."""
     return get_security_utils().validate_context(context)
