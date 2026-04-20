@@ -31,6 +31,7 @@ from ..domain.ports import (
     QueryNormalizerPort,
     SemanticIndexPort,
     StoragePort,
+    TelemetryPort,
     TokenCounterPort,
 )
 from .adapters import (
@@ -43,6 +44,7 @@ from .adapters import (
     SimpleQueryNormalizerAdapter,
     SimpleSemanticIndexAdapter,
 )
+from .telemetry import InMemoryTelemetryAdapter, JSONLTelemetryAdapter
 
 
 @dataclass
@@ -64,6 +66,7 @@ class Container:
     embedding_generator: EmbeddingGeneratorPort
     metrics: CacheMetricsPort
     event_publisher: EventPublisherPort
+    telemetry: TelemetryPort
     policy: CachePolicy
 
     # Application use cases
@@ -119,6 +122,7 @@ def build_container(
     embedding_generator: EmbeddingGeneratorPort | None = None,
     metrics: CacheMetricsPort | None = None,
     event_publisher: EventPublisherPort | None = None,
+    telemetry: TelemetryPort | None = None,
 ) -> Container:
     """Build a wired :class:`Container`.
 
@@ -151,6 +155,11 @@ def build_container(
     query_normalizer = query_normalizer or SimpleQueryNormalizerAdapter()
     metrics = metrics or InMemoryCacheMetricsAdapter()
     event_publisher = event_publisher or InMemoryEventPublisherAdapter()
+    telemetry = telemetry or (
+        InMemoryTelemetryAdapter()
+        if in_memory
+        else JSONLTelemetryAdapter(Path(resolved_cache_dir) / "events.jsonl")
+    )
 
     query_cache = QueryCacheUseCase(
         storage=storage,
@@ -188,6 +197,7 @@ def build_container(
         embedding_generator=embedding_generator,
         metrics=metrics,
         event_publisher=event_publisher,
+        telemetry=telemetry,
         policy=policy,
         query_cache=query_cache,
         store_cache=store_cache,

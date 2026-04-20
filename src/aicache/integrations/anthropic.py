@@ -25,10 +25,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time as _time
 from typing import TYPE_CHECKING, Any, Protocol
 
 from ..infrastructure import Container, get_container
-from ._common import build_request_fingerprint, extract_text_for_fingerprint
+from ._common import (
+    build_request_fingerprint,
+    extract_text_for_fingerprint,
+    record_ai_call_event,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     pass
@@ -64,9 +69,12 @@ class _CachedMessages:
         storage_key = _storage_key(fingerprint)
         prompt = extract_text_for_fingerprint(params)
 
+        start = _time.perf_counter()
         cached = _run_sync(self._container.query_cache.execute(fingerprint, query_text=prompt))
         if cached.hit and cached.value is not None:
-            return _deserialise_message(cached.value, params)
+            response = _deserialise_message(cached.value, params)
+            _log_call(self._container, params, response, fingerprint, start, True, cached)
+            return response
 
         response = self._upstream.create(**params)
         serialised = _serialise_message(response)
@@ -75,6 +83,7 @@ class _CachedMessages:
                 key=storage_key, value=serialised, query_text=prompt
             )
         )
+        _log_call(self._container, params, response, fingerprint, start, False, cached)
         return response
 
     async def acreate(self, **params: Any) -> Any:
@@ -88,15 +97,19 @@ class _CachedMessages:
         storage_key = _storage_key(fingerprint)
         prompt = extract_text_for_fingerprint(params)
 
+        start = _time.perf_counter()
         cached = await self._container.query_cache.execute(fingerprint, query_text=prompt)
         if cached.hit and cached.value is not None:
-            return _deserialise_message(cached.value, params)
+            response = _deserialise_message(cached.value, params)
+            await _alog_call(self._container, params, response, fingerprint, start, True, cached)
+            return response
 
         response = await self._upstream.create(**params)
         serialised = _serialise_message(response)
         await self._container.store_cache.execute(
             key=storage_key, value=serialised, query_text=prompt
         )
+        await _alog_call(self._container, params, response, fingerprint, start, False, cached)
         return response
 
 
@@ -196,3 +209,47 @@ def _run_sync(coro: Any) -> Any:
 
 async def _materialise(coro: Any) -> Any:
     return await coro
+
+
+def _log_call(
+    container: Any,
+    params: dict[str, Any],
+    response: Any,
+    fingerprint: str,
+    start: float,
+    cache_hit: bool,
+    cached: Any,
+) -> None:
+    match_type = _match_type(cache_hit, cached)
+    record_ai_call_event(
+        container,
+        provider=_PROVIDER,
+        params=params,
+        response=response,
+        fingerprint=fingerprint,
+        latency_ms=(_time.perf_counter() - start) * 1000.0,
+        cache_hit=cache_hit,
+        match_type=match_type,
+    )
+
+
+async def _alog_call(
+    container: Any,
+    params: dict[str, Any],
+    response: Any,
+    fingerprint: str,
+    start: float,
+    cache_hit: bool,
+    cached: Any,
+) -> None:
+    # Fire-and-forget synchronous recording on the event log — file
+    # append is fast enough that we don't need a separate writer task.
+    _log_call(container, params, response, fingerprint, start, cache_hit, cached)
+
+
+def _match_type(cache_hit: bool, cached: Any) -> str:
+    if not cache_hit:
+        return "miss"
+    if getattr(cached, "similarity_score", None) is not None:
+        return "semantic"
+    return "exact"

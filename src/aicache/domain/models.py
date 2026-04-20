@@ -208,6 +208,34 @@ class CacheResult:
 
 
 @dataclass(frozen=True)
+class AICallEvent:
+    """Per-AI-call telemetry record (§6).
+
+    Captures what was asked, what came back, what it cost, and whether
+    the cache served it. Written immutably to the event log so rolling
+    savings reports can be aggregated offline.
+    """
+
+    timestamp: datetime
+    provider: str
+    model: str
+    prompt_hash: str
+    tokens_in: int
+    tokens_out: int
+    latency_ms: float
+    cost_usd: float
+    cache_hit: bool
+    match_type: str  # "exact" | "semantic" | "miss"
+    model_version: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.match_type not in {"exact", "semantic", "miss"}:
+            raise ValueError(f"invalid match_type: {self.match_type}")
+        if self.tokens_in < 0 or self.tokens_out < 0:
+            raise ValueError("token counts cannot be negative")
+
+
+@dataclass(frozen=True)
 class TokenUsageMetrics:
     """Immutable token usage metrics."""
 

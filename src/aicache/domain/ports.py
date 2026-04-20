@@ -8,7 +8,7 @@ This separation ensures domain logic is independent of specific technologies.
 from abc import ABC, abstractmethod
 from typing import Any
 
-from .models import CacheEntry, CacheInvalidationEvent, SemanticMatch
+from .models import AICallEvent, CacheEntry, CacheInvalidationEvent, SemanticMatch
 
 
 class StoragePort(ABC):
@@ -206,6 +206,24 @@ class TOONRepositoryPort(ABC):
     @abstractmethod
     async def clear_toons(self) -> int:
         """Clear all TOONs."""
+        pass
+
+
+class TelemetryPort(ABC):
+    """Port for per-AI-call observability events (§6).
+
+    Decoupled from CacheMetricsPort so bulk metrics aggregation can live
+    in-memory while full event records persist to an append-only log.
+    """
+
+    @abstractmethod
+    async def record_ai_call(self, event: AICallEvent) -> None:
+        """Record a single AI call."""
+        pass
+
+    @abstractmethod
+    async def read_recent(self, days: int = 30) -> list[AICallEvent]:
+        """Return events from the last N days."""
         pass
 
 

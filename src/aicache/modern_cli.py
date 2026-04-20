@@ -733,6 +733,58 @@ def toon_last():
         console.print(f"[yellow]⚠ Error: {e}[/yellow]")
 
 
+@cli.command()
+@click.option("--days", default=30, help="Rolling window (days)")
+@click.option("--json", "as_json", is_flag=True, help="Emit machine-readable JSON")
+def savings(days: int, as_json: bool) -> None:
+    """Rolling SDK-wrapper savings from the telemetry event log (§6)."""
+    import asyncio
+
+    from .infrastructure import summarise
+
+    container = get_container()
+    events = asyncio.run(container.telemetry.read_recent(days=days))
+    report = summarise(events)
+
+    if as_json:
+        console.print_json(data=report)
+        return
+
+    title = f"💰 Savings — last {days} days"
+    console.print(
+        Panel.fit(
+            (
+                f"[bold]Calls:[/bold] {report['total_calls']}  "
+                f"[bold]Hits:[/bold] {report['hits']}  "
+                f"[bold]Misses:[/bold] {report['misses']}  "
+                f"[bold]Hit rate:[/bold] {report['hit_rate']:.1%}\n"
+                f"[bold green]Cost saved:[/bold green] ${report['cost_saved_usd']:.4f}  "
+                f"[bold]Cost spent:[/bold] ${report['cost_spent_usd']:.4f}  "
+                f"[bold]Tokens saved:[/bold] {report['tokens_saved']:,}"
+            ),
+            title=title,
+            border_style="green",
+        )
+    )
+
+    if report["per_model"]:
+        table = Table(title="Per model", show_header=True, header_style="bold blue")
+        table.add_column("Model")
+        table.add_column("Hits", justify="right")
+        table.add_column("Misses", justify="right")
+        table.add_column("Saved (USD)", justify="right")
+        table.add_column("Spent (USD)", justify="right")
+        for model, bucket in sorted(report["per_model"].items()):
+            table.add_row(
+                model,
+                str(bucket["hits"]),
+                str(bucket["misses"]),
+                f"{bucket['cost_saved_usd']:.4f}",
+                f"{bucket['cost_spent_usd']:.4f}",
+            )
+        console.print(table)
+
+
 @cli.group()
 def mcp():
     """MCP (Model Context Protocol) integration"""
