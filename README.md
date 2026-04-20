@@ -1,197 +1,144 @@
 # aicache
 
-🚀 **AI CLI Session Caching with Token Optimization Analytics**
+**Drop-in caching for Claude and OpenAI SDK calls — with semantic hits, cost telemetry, and an MCP server for agents.**
 
-This project is a production-grade caching system for AI CLIs (Gemini, Claude, Qwen, and OpenAI) that improves developer workflow efficiency while providing comprehensive token cost transparency through TOON (Token Optimization Object Notation).
+One import change. Second identical call is free, tracked, and ~1 ms.
+Rephrased calls hit too, when semantic caching is on.
 
-**Key Innovation**: Automatically track, analyze, and optimize token spending with interactive dashboards, CLI tools, and data-driven insights on every cache operation.
+```python
+from anthropic import Anthropic
+from aicache.integrations.anthropic import cached_client
 
-## 🚀 Features
+client = cached_client(Anthropic())
 
-- **Advanced Caching**: Automatic session caching for `gcloud`, `llm`, `openai`, `claude`, `gemini`, and `qwen` CLIs.
-- **Intelligent Parsing**: Intelligent argument parsing to create accurate cache keys.
-- **Persistent Storage**: Persistence of cache across sessions.
-- **Comprehensive Management**: A rich set of commands to manage the cache (`list`, `inspect`, `clear`, `prune`, `stats`).
-- **Interactive Tools**: Interactive cache clearing and management.
-- **Shell Integration**: Completions for `bash` and custom wrapper support.
-- **Semantic Search**: AI-powered semantic matching for similar queries using embedding models.
-- **Behavioral Analytics**: Learning user patterns to optimize caching strategies.
-- **Predictive Prefetching**: Proactively caching likely future queries based on patterns.
-- **Multi-Modal Support**: Cache support for images, notebooks, audio, and video files.
-- **Enhanced Security**: PII detection and data sanitization for sensitive information.
-- **Performance Optimization**: Efficient compression and storage algorithms.
-- **🎯 TOON Analytics**: Comprehensive Token Optimization Object Notation system for transparent cost tracking and analytics (see below).
-
-## 📦 Installation
-
-### Prerequisites
-- Python 3.8 or higher
-- The AI CLI tools you want to cache (e.g., `gemini`, `claude`, `qwen`, etc.) must be installed and available in your PATH
-
-### Quick Setup
-
-1. **Install from PyPI (recommended):**
-    ```bash
-    pip install aicache
-    ```
-
-2. **Or install from source:**
-    ```bash
-    git clone https://github.com/asmeyatsky/aicache.git
-    cd aicache
-    pip install .
-    ```
-
-3. **Setup CLI wrappers:**
-    ```bash
-    aicache install --setup-wrappers
-    ```
-
-4. **Update your shell's configuration:**
-    Make sure `~/.local/bin` is in your `$PATH` and has precedence over the default paths. Add the following line to your `~/.bashrc`, `~/.zshrc`, or other shell configuration file:
-    ```bash
-    export PATH="$HOME/.local/bin:$PATH"
-    ```
-    Restart your shell for the changes to take effect.
-
-## 🛠️ Usage
-
-Once installed, the `aicache` wrappers for `gcloud`, `llm`, `openai`, `claude`, `gemini`, and `qwen` will work automatically. When you run a command with any of these AI CLIs, the wrapper will cache the response. The next time you run the same command, the response will be served from the cache.
-
-### CLI Commands
-
-`aicache` provides a comprehensive command-line interface to manage the cache:
-
-*   `aicache list`: List all cached entries.
-    *   `--verbose`: Show more details for each entry.
-*   `aicache inspect <cache_key>`: Inspect a specific cache entry.
-*   `aicache clear`: Clear the entire cache.
-    *   `--interactive`: Interactively select which entries to delete.
-*   `aicache generate-completions`: Generate a bash script for shell completions.
-*   `aicache stats`: Show cache statistics and performance metrics.
-*   `aicache prune`: Remove expired or low-priority cache entries.
-*   `aicache install`: Install/uninstall CLI wrappers and configuration.
-    *   `--setup-wrappers`: Install all available CLI wrappers
-    *   `--config`: Create default configuration file
-    *   `--list`: List available CLI tools
-*   `aicache analytics`: Show behavioral analytics and usage patterns.
-    *   `--behavioral`: Show behavioral analytics
-    *   `--patterns`: Show learned usage patterns
-    *   `--prefetch`: Show prefetch statistics
-*   `aicache predict <query>`: Predict likely next queries based on patterns.
-*   `aicache prefetch <query>`: Prefetch a specific query proactively.
-*   `aicache create-generic-wrapper`: Create custom wrapper for any CLI tool.
-*   `aicache cache-image/cache-notebook/cache-audio/cache-video`: Commands for multi-modal caching.
-
-### 🎯 TOON Commands (Token Optimization Analytics)
-
-TOON provides transparent token cost tracking and optimization insights for every cache operation:
-
-*   `aicache toon list [--limit=50] [-v|--verbose]`: List recent TOON operations with detailed breakdown.
-*   `aicache toon inspect <operation_id>`: View complete details of a specific TOON operation.
-*   `aicache toon last`: Show the most recent TOON operation.
-*   `aicache toon analytics [--period=1d|7d|30d|1w|1m]`: View aggregated cache analytics and metrics.
-*   `aicache toon query [--type=exact_hit|semantic_hit|...] [--min-tokens=100] [--min-similarity=0.9]`: Advanced querying with filters.
-*   `aicache toon export [--format=json|csv|jsonl|msgpack] [--limit=500] [-o|--output=file]`: Export TOON data for analysis.
-*   `aicache toon insights [--days=1]`: Get data-driven recommendations for optimization.
-*   `aicache toon delete <operation_id>`: Delete a specific TOON operation.
-*   `aicache toon clear [--confirm]`: Clear all TOON operations.
-
-## 🎯 TOON: Token Optimization Object Notation
-
-TOON is a comprehensive system that transforms cache operations from a black box into transparent, auditable, cost-optimized intelligence. Every cache operation generates a TOON object that captures:
-
-### What TOON Tracks
-
-✅ **Financial Transparency**
-- Exact token/cost savings per operation
-- Daily cost tracking and ROI calculations
-- Projected monthly/annual savings
-
-✅ **Performance Metrics**
-- Hit rates (exact matches, semantic matches, intent-based)
-- Response times and efficiency scoring
-- Cache age, TTL, and eviction risk
-
-✅ **Decision Context**
-- Why each cache decision was made (exact hit, semantic, intent, miss)
-- Semantic similarity scores and confidence levels
-- Optimization insights and recommendations
-
-✅ **Historical Analytics**
-- Trends in cache performance (improving/declining)
-- Pattern detection and usage patterns
-- Complete audit trail of all operations
-
-### TOON Features
-
-🔹 **Automatic Generation** - TOON is created automatically on every cache operation (0 breaking changes)
-🔹 **CLI Tools** - 9 commands for inspection, analysis, and export
-🔹 **Interactive Dashboard** - Beautiful HTML reports with 4 real-time charts
-🔹 **Automated Reports** - Daily/weekly/monthly report generation
-🔹 **Advanced Querying** - Filter TOONs by type, tokens saved, similarity, time range
-🔹 **Multiple Exports** - JSON, CSV, JSONL, and binary msgpack formats
-🔹 **Data-Driven Insights** - Actionable recommendations for optimization
-
-### Quick TOON Example
-
-```bash
-# View recent cache operations and their savings
-aicache toon list --verbose
-
-# Get detailed breakdown of today's analytics
-aicache toon analytics --period=1d
-
-# Export data for external analysis
-aicache toon export --format=csv --limit=500 > cache_analysis.csv
-
-# Get AI-powered insights for optimization
-aicache toon insights --days=7
+# First call → real API, tokens billed, event logged.
+# Second identical call → cached, $0, tracked in savings report.
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Explain the Fourier transform"}],
+)
 ```
 
-### Real Impact
+## Why this exists
 
-With TOON, you can answer questions like:
-- "How much am I saving with caching?" → $1.35/day, $40.50/month
-- "What's my cache hit rate?" → 87.5% (exact: 65%, semantic: 22%)
-- "Which caching strategy works best?" → Data-driven recommendations
-- "Is cache performance improving?" → Yes, trending up 5% this week
+Anthropic's and OpenAI's built-in prompt caching helps with prefix reuse
+within a session. It does not help with:
 
-### TOON Documentation
+- **Rerunning the same agent flow twice** in development — you pay twice.
+- **Rephrased prompts** that should return the same answer — no hit.
+- **Cross-provider cost visibility** — you have to stitch together
+  dashboards from each vendor.
 
-For comprehensive guides on using TOON, see:
-- [TOON_INTRODUCTION.md](docs/TOON_INTRODUCTION.md) - Overview and benefits
-- [TOON_SPECIFICATION.md](docs/TOON_SPECIFICATION.md) - Complete technical specification
-- [TOON_INTEGRATION_GUIDE.md](docs/TOON_INTEGRATION_GUIDE.md) - Integration examples
-- [TOON_QUICK_REFERENCE.md](docs/TOON_QUICK_REFERENCE.md) - CLI command reference
-- [TOON_INDEX.md](TOON_INDEX.md) - Navigation guide
+aicache sits one layer above the SDK and fills those gaps. Same
+fingerprint + same params → cache hit. Similar meaning → semantic hit
+(optional). Every call, hit or miss, written to
+`~/.cache/aicache/events.jsonl` with `tokens_in`, `tokens_out`,
+`cost_usd`, `model`, `latency_ms`, `cache_hit`, `match_type`.
 
-## 📊 Configuration
-
-aicache can be configured using a YAML configuration file. By default, it looks for `~/.config/aicache/config.yaml`. You can create a default configuration file using:
+## Install
 
 ```bash
-aicache install --config
+pip install aicache                      # base: exact-match cache + MCP server
+pip install aicache[anthropic]           # + Anthropic SDK integration
+pip install aicache[openai]              # + OpenAI SDK integration
+pip install aicache[semantic]            # + Chroma + sentence-transformers
+pip install aicache[observability]       # + OpenTelemetry tracing shim
+pip install aicache[all]                 # everything incl. dev extras
 ```
 
-## 🤝 Contributing
+Python 3.12+.
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to:
-- Set up a development environment
-- Submit pull requests
-- Report bugs
-- Request features
-- Follow our code of conduct
+## Quick tour
 
-## 🛡️ Security
+### 1. SDK wrapper — the 80% case
 
-Please see our [Security Policy](SECURITY.md) for information on how to report security vulnerabilities.
+```python
+from anthropic import Anthropic
+from aicache.integrations.anthropic import cached_client
 
-## 📄 License
+client = cached_client(Anthropic())
+client.messages.create(model="claude-sonnet-4-6", max_tokens=512,
+                       messages=[{"role": "user", "content": "hello"}])
+```
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Works for sync and async clients. Same pattern for OpenAI:
 
-## 🙏 Acknowledgments
+```python
+from openai import OpenAI
+from aicache.integrations.openai import cached_client
 
-- Thanks to all contributors who help maintain and improve aicache
-- Inspired by the need for efficient AI CLI workflows in development environments
+client = cached_client(OpenAI())
+client.chat.completions.create(model="gpt-4o",
+                               messages=[{"role": "user", "content": "hi"}])
+```
+
+Full reference: [`docs/SDK_QUICKSTART.md`](docs/SDK_QUICKSTART.md).
+
+### 2. Semantic hits across rephrasings (optional)
+
+```python
+from aicache.infrastructure import build_container
+from aicache.integrations.anthropic import cached_client
+from anthropic import Anthropic
+
+client = cached_client(Anthropic(), container=build_container(semantic=True))
+# "How do I sort a list in Python?" and "python sort a list example"
+# resolve to the same cache entry above the similarity threshold.
+```
+
+Uses ChromaDB + sentence-transformers locally. No network, no API key.
+
+### 3. MCP server for agents
+
+```bash
+aicache mcp start           # stdio; point Claude Desktop / Claude Code at it
+```
+
+One MCP server exposes cache tools (writes) and resources (reads)
+following [Architectural Rules 2026 §3.5](Architectural%20Rules%20%E2%80%94%202026.md).
+
+### 4. Rolling savings report
+
+```bash
+aicache savings --days 30
+```
+
+Reads `~/.cache/aicache/events.jsonl` and prints hit rate, tokens saved,
+`$` saved vs `$` spent, per-model breakdown. `--json` for CI.
+
+## Architecture
+
+Hexagonal / ports-and-adapters. Aligned to [Architectural Rules — 2026](Architectural%20Rules%20%E2%80%94%202026.md).
+
+```
+domain/         ← models, ports, services (no SDK imports, no I/O)
+application/    ← use cases (imports only domain)
+infrastructure/ ← adapters, container, MCP server, telemetry
+integrations/   ← Anthropic / OpenAI SDK wrappers (presentation)
+```
+
+Enforced in CI by [`import-linter`](pyproject.toml). Add a
+domain→infrastructure import and the build fails.
+
+## Roadmap
+
+See [`plan200426.md`](plan200426.md). Delivered to date: Phases 0–5
+(guardrails, hex wiring, SDK wedge, MCP consolidation, semantic
+caching, observability). Phase 6 is the README + demo you are looking
+at; Phase 7 is a deferred Rust-kernel ADR.
+
+## Contributing
+
+1. `make dev` to install with the `[dev]` extras.
+2. `make ci` runs lint + import-linter + tests with coverage gate.
+3. `make type` shows the current mypy backlog (not blocking until
+   Phase 1 coverage catches up — tracked in
+   [`docs/COVERAGE_RATCHET.md`](docs/COVERAGE_RATCHET.md)).
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and
+[SECURITY.md](SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
