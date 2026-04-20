@@ -28,7 +28,7 @@ import json
 from typing import TYPE_CHECKING, Any, Protocol
 
 from ..infrastructure import Container, get_container
-from ._common import build_request_fingerprint
+from ._common import build_request_fingerprint, extract_text_for_fingerprint
 
 if TYPE_CHECKING:  # pragma: no cover
     pass
@@ -62,14 +62,19 @@ class _CachedMessages:
     def create(self, **params: Any) -> Any:
         fingerprint = build_request_fingerprint(_PROVIDER, params)
         storage_key = _storage_key(fingerprint)
+        prompt = extract_text_for_fingerprint(params)
 
-        cached = _run_sync(self._container.query_cache.execute(fingerprint))
+        cached = _run_sync(self._container.query_cache.execute(fingerprint, query_text=prompt))
         if cached.hit and cached.value is not None:
             return _deserialise_message(cached.value, params)
 
         response = self._upstream.create(**params)
         serialised = _serialise_message(response)
-        _run_sync(self._container.store_cache.execute(key=storage_key, value=serialised))
+        _run_sync(
+            self._container.store_cache.execute(
+                key=storage_key, value=serialised, query_text=prompt
+            )
+        )
         return response
 
     async def acreate(self, **params: Any) -> Any:
@@ -81,14 +86,17 @@ class _CachedMessages:
         """
         fingerprint = build_request_fingerprint(_PROVIDER, params)
         storage_key = _storage_key(fingerprint)
+        prompt = extract_text_for_fingerprint(params)
 
-        cached = await self._container.query_cache.execute(fingerprint)
+        cached = await self._container.query_cache.execute(fingerprint, query_text=prompt)
         if cached.hit and cached.value is not None:
             return _deserialise_message(cached.value, params)
 
         response = await self._upstream.create(**params)
         serialised = _serialise_message(response)
-        await self._container.store_cache.execute(key=storage_key, value=serialised)
+        await self._container.store_cache.execute(
+            key=storage_key, value=serialised, query_text=prompt
+        )
         return response
 
 

@@ -76,15 +76,33 @@ class Container:
     admin_cache: CoreCache
 
 
-def _default_policy() -> CachePolicy:
+def _default_policy(enable_semantic: bool = False) -> CachePolicy:
     return CachePolicy(
         max_size_bytes=1024 * 1024 * 1024,  # 1 GiB
         default_ttl_seconds=None,
         eviction_policy=EvictionPolicy.LRU,
         semantic_match_threshold=0.85,
         enable_compression=False,
-        enable_semantic_caching=False,  # flipped on in Phase 4
+        enable_semantic_caching=enable_semantic,
     )
+
+
+def _build_semantic_adapters(
+    persist_directory: str | None,
+) -> tuple[SemanticIndexPort, EmbeddingGeneratorPort]:
+    """Construct the real Chroma + sentence-transformers pair.
+
+    Kept isolated so the ImportError from a missing extra surfaces
+    clearly at container build time rather than at first query.
+    """
+    from .semantic_adapters import (
+        ChromaSemanticIndexAdapter,
+        SentenceTransformerEmbeddingAdapter,
+    )
+
+    index = ChromaSemanticIndexAdapter(persist_directory=persist_directory)
+    embedder = SentenceTransformerEmbeddingAdapter()
+    return index, embedder
 
 
 def build_container(
@@ -92,6 +110,8 @@ def build_container(
     cache_dir: str | Path | None = None,
     policy: CachePolicy | None = None,
     in_memory: bool = False,
+    semantic: bool = False,
+    semantic_persist_directory: str | None = None,
     storage: StoragePort | None = None,
     semantic_index: SemanticIndexPort | None = None,
     token_counter: TokenCounterPort | None = None,
@@ -107,7 +127,7 @@ def build_container(
     in-memory adapter — the standard seam for application-layer tests.
     """
 
-    policy = policy or _default_policy()
+    policy = policy or _default_policy(enable_semantic=semantic)
     resolved_cache_dir = (
         str(Path(cache_dir).expanduser()) if cache_dir else str(Path.home() / ".cache" / "aicache")
     )
@@ -115,10 +135,20 @@ def build_container(
     storage = storage or (
         InMemoryStorageAdapter() if in_memory else FileSystemStorageAdapter(resolved_cache_dir)
     )
-    semantic_index = semantic_index or SimpleSemanticIndexAdapter()
+
+    if semantic_index is None or embedding_generator is None:
+        if semantic:
+            default_index, default_embedder = _build_semantic_adapters(semantic_persist_directory)
+        else:
+            default_index, default_embedder = (
+                SimpleSemanticIndexAdapter(),
+                SimpleEmbeddingGeneratorAdapter(),
+            )
+        semantic_index = semantic_index or default_index
+        embedding_generator = embedding_generator or default_embedder
+
     token_counter = token_counter or OpenAITokenCounterAdapter()
     query_normalizer = query_normalizer or SimpleQueryNormalizerAdapter()
-    embedding_generator = embedding_generator or SimpleEmbeddingGeneratorAdapter()
     metrics = metrics or InMemoryCacheMetricsAdapter()
     event_publisher = event_publisher or InMemoryEventPublisherAdapter()
 

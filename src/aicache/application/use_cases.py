@@ -61,12 +61,22 @@ class QueryCacheUseCase:
         self.policy = cache_policy
         self.ttl_service = CacheTTLService()
 
-    async def execute(self, query: str, context: dict[str, Any] | None = None) -> CacheResult:
-        """Execute cache query."""
+    async def execute(
+        self,
+        query: str,
+        context: dict[str, Any] | None = None,
+        query_text: str | None = None,
+    ) -> CacheResult:
+        """Execute cache query.
+
+        ``query`` is the exact-match key (typically a fingerprint).
+        ``query_text`` is the natural-language prompt used for semantic
+        similarity; it falls back to ``query`` when unspecified.
+        """
         start_time = time.time()
+        semantic_query = query_text or query
 
         try:
-            # Step 1: Try exact match with normalization
             exact_result = await self._try_exact_match(query, context)
             if exact_result.hit:
                 response_time_ms = (time.time() - start_time) * 1000
@@ -77,10 +87,13 @@ class QueryCacheUseCase:
                     exact_result.value, exact_result.entry_key, response_time_ms
                 )
 
-            # Step 2: Try semantic match if enabled
             if self.policy.enable_semantic_caching:
-                semantic_result = await self._try_semantic_match(query)
-                if semantic_result.hit and semantic_result.confidence > 0.85:
+                semantic_result = await self._try_semantic_match(semantic_query)
+                if (
+                    semantic_result.hit
+                    and semantic_result.confidence
+                    and semantic_result.confidence > 0.85
+                ):
                     response_time_ms = (time.time() - start_time) * 1000
                     await self.metrics.record_hit(
                         semantic_result.entry_key or "",
@@ -90,7 +103,6 @@ class QueryCacheUseCase:
                     )
                     return semantic_result
 
-            # Step 3: Cache miss
             response_time_ms = (time.time() - start_time) * 1000
             await self.metrics.record_miss(query, "not_found")
             return CacheResult.create_miss(response_time_ms)
@@ -192,10 +204,16 @@ class StoreCacheUseCase:
         value: bytes,
         ttl_seconds: int | None = None,
         context: dict[str, Any] | None = None,
+        query_text: str | None = None,
     ) -> None:
-        """Store cache entry."""
+        """Store cache entry.
+
+        ``query_text`` is the natural-language prompt; when supplied it
+        drives the semantic embedding. Without it the raw key is used,
+        which is only meaningful for fingerprint-keyed callers where
+        the key already carries semantic content.
+        """
         try:
-            # Check if eviction is necessary
             cache_size = await self.storage.get_size_bytes()
             entry_size = len(value)
 
@@ -203,14 +221,13 @@ class StoreCacheUseCase:
             for evicted_key in evicted_keys:
                 await self.metrics.record_eviction(evicted_key, self.policy.eviction_policy.value)
 
-            # Create cache entry
             now = datetime.now()
             expires_at = now + timedelta(seconds=ttl_seconds) if ttl_seconds else None
 
             metadata = CacheMetadata(
                 created_at=now,
                 accessed_count=0,
-                normalized_query=key,
+                normalized_query=query_text or key,
                 metadata={"context": context} if context else {},
             )
 
