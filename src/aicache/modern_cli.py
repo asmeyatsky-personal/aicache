@@ -31,7 +31,18 @@ except ImportError:
     yaml = None
 
 from .config import get_config_manager
-from .core.cache import get_cache
+from .infrastructure import get_container
+
+
+def get_cache():
+    """Return the legacy CoreCache admin handle from the wired container.
+
+    Presentation-layer shim: kept so existing Click command bodies stay
+    untouched while the container becomes the single composition point
+    for storage/use-case wiring (§3.6).
+    """
+    return get_container().admin_cache
+
 
 console = Console()
 

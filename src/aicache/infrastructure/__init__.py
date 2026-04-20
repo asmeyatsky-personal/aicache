@@ -1,4 +1,4 @@
-"""Infrastructure layer: Adapter implementations for external dependencies."""
+"""Infrastructure layer: adapters + composition root."""
 
 from .adapters import (
     FileSystemStorageAdapter,
@@ -10,8 +10,10 @@ from .adapters import (
     SimpleQueryNormalizerAdapter,
     SimpleSemanticIndexAdapter,
 )
+from .container import Container, build_container, get_container, reset_container
 
 __all__ = [
+    "Container",
     "FileSystemStorageAdapter",
     "InMemoryCacheMetricsAdapter",
     "InMemoryEventPublisherAdapter",
@@ -20,4 +22,7 @@ __all__ = [
     "SimpleEmbeddingGeneratorAdapter",
     "SimpleQueryNormalizerAdapter",
     "SimpleSemanticIndexAdapter",
+    "build_container",
+    "get_container",
+    "reset_container",
 ]

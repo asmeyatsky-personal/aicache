@@ -149,6 +149,8 @@ source_modules = ["aicache.domain"]
 forbidden_modules = [
   "aicache.application",
   "aicache.infrastructure",
+  "aicache.core",
+  "aicache.cache_factory",
   "aicache.modern_cli",
   "aicache.mcp_server",
   "aicache.plugins",
@@ -161,6 +163,8 @@ type = "forbidden"
 source_modules = ["aicache.application"]
 forbidden_modules = [
   "aicache.infrastructure",
+  "aicache.core",
+  "aicache.cache_factory",
   "aicache.modern_cli",
   "aicache.mcp_server",
   "aicache.plugins",
