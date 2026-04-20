@@ -21,6 +21,16 @@ dist/
 # Test artifacts
 .pytest_cache/
 test_project/
+.coverage
+coverage.xml
+htmlcov/
+
+# Tool caches
+.ruff_cache/
+.mypy_cache/
+
+# OS
+.DS_Store
 
 # Deployment instructions
 deployment.md

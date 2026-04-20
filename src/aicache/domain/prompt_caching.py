@@ -6,7 +6,6 @@ Based on 2026 trends: OpenAI automatic, Anthropic explicit, Google implicit cach
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
 
@@ -42,7 +41,7 @@ class PromptCacheConfig:
     provider: CacheProvider
     cache_min_tokens: int = 1024
     cache_ttl_seconds: int = 3600  # Default 1 hour
-    cache_prefix: Optional[str] = None
+    cache_prefix: str | None = None
     auto_cache_enabled: bool = True
 
 
@@ -50,13 +49,13 @@ class PromptCachePort(ABC):
     """Port for provider-specific prompt caching."""
 
     @abstractmethod
-    async def check_cache(self, messages: List[Dict[str, str]]) -> PromptCacheResult:
+    async def check_cache(self, messages: list[dict[str, str]]) -> PromptCacheResult:
         """Check if prompt is cached (read operation)."""
         pass
 
     @abstractmethod
     async def cache_prompt(
-        self, messages: List[Dict[str, str]], cache_key: Optional[str] = None
+        self, messages: list[dict[str, str]], cache_key: str | None = None
     ) -> bool:
         """Cache a prompt for future use (write operation)."""
         pass
@@ -72,9 +71,7 @@ class PromptCachePort(ABC):
         pass
 
     @abstractmethod
-    def calculate_savings(
-        self, cached_tokens: int, new_tokens: int, original_cost: float
-    ) -> float:
+    def calculate_savings(self, cached_tokens: int, new_tokens: int, original_cost: float) -> float:
         """Calculate cost savings from caching."""
         pass
 
@@ -98,9 +95,9 @@ class OpenAIPromptCacheAdapter(PromptCachePort):
             cache_ttl_seconds=86400,  # 24 hours
             auto_cache_enabled=True,
         )
-        self._cache_hits: Dict[str, bool] = {}
+        self._cache_hits: dict[str, bool] = {}
 
-    async def check_cache(self, messages: List[Dict[str, str]]) -> PromptCacheResult:
+    async def check_cache(self, messages: list[dict[str, str]]) -> PromptCacheResult:
         """Check if prompt benefits from caching (OpenAI does this automatically)."""
         total_tokens = self._estimate_tokens(messages)
         cached_tokens = total_tokens if total_tokens >= 1024 else 0
@@ -117,7 +114,7 @@ class OpenAIPromptCacheAdapter(PromptCachePort):
         )
 
     async def cache_prompt(
-        self, messages: List[Dict[str, str]], cache_key: Optional[str] = None
+        self, messages: list[dict[str, str]], cache_key: str | None = None
     ) -> bool:
         """OpenAI caches automatically when conditions met."""
         total_tokens = self._estimate_tokens(messages)
@@ -137,9 +134,7 @@ class OpenAIPromptCacheAdapter(PromptCachePort):
     def get_cache_config(self) -> PromptCacheConfig:
         return self._config
 
-    def calculate_savings(
-        self, cached_tokens: int, new_tokens: int, original_cost: float
-    ) -> float:
+    def calculate_savings(self, cached_tokens: int, new_tokens: int, original_cost: float) -> float:
         if cached_tokens == 0:
             return 0.0
         # 50% discount on cached tokens
@@ -148,14 +143,14 @@ class OpenAIPromptCacheAdapter(PromptCachePort):
         original = (original_cost / 1000) * 0.15
         return original - (cached_cost + new_cost)
 
-    def _estimate_tokens(self, messages: List[Dict[str, str]]) -> int:
+    def _estimate_tokens(self, messages: list[dict[str, str]]) -> int:
         """Estimate token count for messages."""
         total = 0
         for msg in messages:
             total += len(msg.get("content", "")) // 4
         return total
 
-    def _generate_cache_key(self, messages: List[Dict[str, str]]) -> str:
+    def _generate_cache_key(self, messages: list[dict[str, str]]) -> str:
         """Generate cache key from messages."""
         import hashlib
 
@@ -175,7 +170,7 @@ class AnthropicPromptCacheAdapter(PromptCachePort):
 
     def __init__(self, model: str = "claude-sonnet-4-20250514"):
         self.model = model
-        self._cache_prefixes: Dict[str, str] = {}
+        self._cache_prefixes: dict[str, str] = {}
         self._config = PromptCacheConfig(
             provider=CacheProvider.ANTHROPIC,
             cache_min_tokens=1024,
@@ -183,16 +178,12 @@ class AnthropicPromptCacheAdapter(PromptCachePort):
             auto_cache_enabled=False,  # Must specify cache_prefix
         )
 
-    async def check_cache(self, messages: List[Dict[str, str]]) -> PromptCacheResult:
+    async def check_cache(self, messages: list[dict[str, str]]) -> PromptCacheResult:
         """Check cache status for messages."""
         total_tokens = self._estimate_tokens(messages)
-        has_cache_prefix = any(
-            self._is_cacheable(msg.get("content", "")) for msg in messages
-        )
+        has_cache_prefix = any(self._is_cacheable(msg.get("content", "")) for msg in messages)
 
-        cached_tokens = (
-            total_tokens if (total_tokens >= 1024 and has_cache_prefix) else 0
-        )
+        cached_tokens = total_tokens if (total_tokens >= 1024 and has_cache_prefix) else 0
         new_tokens = total_tokens - cached_tokens
 
         return PromptCacheResult(
@@ -206,7 +197,7 @@ class AnthropicPromptCacheAdapter(PromptCachePort):
         )
 
     async def cache_prompt(
-        self, messages: List[Dict[str, str]], cache_key: Optional[str] = None
+        self, messages: list[dict[str, str]], cache_key: str | None = None
     ) -> bool:
         """Cache prompt with explicit prefix (required for Anthropic)."""
         total_tokens = self._estimate_tokens(messages)
@@ -228,9 +219,7 @@ class AnthropicPromptCacheAdapter(PromptCachePort):
     def get_cache_config(self) -> PromptCacheConfig:
         return self._config
 
-    def calculate_savings(
-        self, cached_tokens: int, new_tokens: int, original_cost: float
-    ) -> float:
+    def calculate_savings(self, cached_tokens: int, new_tokens: int, original_cost: float) -> float:
         if cached_tokens == 0:
             return 0.0
         # 90% discount on cached tokens
@@ -239,7 +228,7 @@ class AnthropicPromptCacheAdapter(PromptCachePort):
         original = (original_cost / 1000) * 0.003
         return original - (cached_cost + new_cost)
 
-    def _estimate_tokens(self, messages: List[Dict[str, str]]) -> int:
+    def _estimate_tokens(self, messages: list[dict[str, str]]) -> int:
         total = 0
         for msg in messages:
             total += len(msg.get("content", "")) // 4
@@ -249,7 +238,7 @@ class AnthropicPromptCacheAdapter(PromptCachePort):
         """Check if content is marked for caching."""
         return "<cache>" in content
 
-    def _generate_cache_key(self, messages: List[Dict[str, str]]) -> str:
+    def _generate_cache_key(self, messages: list[dict[str, str]]) -> str:
         import hashlib
 
         content = str(messages)
@@ -268,7 +257,7 @@ class GooglePromptCacheAdapter(PromptCachePort):
 
     def __init__(self, model: str = "gemini-2.0-pro"):
         self.model = model
-        self._cached_contexts: Dict[str, List[Dict]] = {}
+        self._cached_contexts: dict[str, list[dict]] = {}
         self._config = PromptCacheConfig(
             provider=CacheProvider.GOOGLE,
             cache_min_tokens=1024,
@@ -276,7 +265,7 @@ class GooglePromptCacheAdapter(PromptCachePort):
             auto_cache_enabled=True,
         )
 
-    async def check_cache(self, messages: List[Dict[str, str]]) -> PromptCacheResult:
+    async def check_cache(self, messages: list[dict[str, str]]) -> PromptCacheResult:
         """Check if messages can use cached context."""
         total_tokens = self._estimate_tokens(messages)
         cached_tokens = total_tokens if total_tokens >= 1024 else 0
@@ -293,7 +282,7 @@ class GooglePromptCacheAdapter(PromptCachePort):
         )
 
     async def cache_prompt(
-        self, messages: List[Dict[str, str]], cache_key: Optional[str] = None
+        self, messages: list[dict[str, str]], cache_key: str | None = None
     ) -> bool:
         """Cache messages as context for future requests."""
         total_tokens = self._estimate_tokens(messages)
@@ -313,9 +302,7 @@ class GooglePromptCacheAdapter(PromptCachePort):
     def get_cache_config(self) -> PromptCacheConfig:
         return self._config
 
-    def calculate_savings(
-        self, cached_tokens: int, new_tokens: int, original_cost: float
-    ) -> float:
+    def calculate_savings(self, cached_tokens: int, new_tokens: int, original_cost: float) -> float:
         if cached_tokens == 0:
             return 0.0
         # 75% discount on cached tokens
@@ -324,13 +311,13 @@ class GooglePromptCacheAdapter(PromptCachePort):
         original = (original_cost / 1000) * 0.0005
         return original - (cached_cost + new_cost)
 
-    def _estimate_tokens(self, messages: List[Dict[str, str]]) -> int:
+    def _estimate_tokens(self, messages: list[dict[str, str]]) -> int:
         total = 0
         for msg in messages:
             total += len(msg.get("content", "")) // 4
         return total
 
-    def _generate_cache_key(self, messages: List[Dict[str, str]]) -> str:
+    def _generate_cache_key(self, messages: list[dict[str, str]]) -> str:
         import hashlib
 
         content = str(messages)
@@ -345,7 +332,7 @@ class MultiProviderPromptCachePort(PromptCachePort):
     """
 
     def __init__(self, primary_provider: CacheProvider = CacheProvider.OPENAI):
-        self._adapters: Dict[CacheProvider, PromptCachePort] = {
+        self._adapters: dict[CacheProvider, PromptCachePort] = {
             CacheProvider.OPENAI: OpenAIPromptCacheAdapter(),
             CacheProvider.ANTHROPIC: AnthropicPromptCacheAdapter(),
             CacheProvider.GOOGLE: GooglePromptCacheAdapter(),
@@ -361,11 +348,11 @@ class MultiProviderPromptCachePort(PromptCachePort):
     def current_adapter(self) -> PromptCachePort:
         return self._adapters[self._current_provider]
 
-    async def check_cache(self, messages: List[Dict[str, str]]) -> PromptCacheResult:
+    async def check_cache(self, messages: list[dict[str, str]]) -> PromptCacheResult:
         return await self.current_adapter.check_cache(messages)
 
     async def cache_prompt(
-        self, messages: List[Dict[str, str]], cache_key: Optional[str] = None
+        self, messages: list[dict[str, str]], cache_key: str | None = None
     ) -> bool:
         return await self.current_adapter.cache_prompt(messages, cache_key)
 
@@ -375,9 +362,5 @@ class MultiProviderPromptCachePort(PromptCachePort):
     def get_cache_config(self) -> PromptCacheConfig:
         return self.current_adapter.get_cache_config()
 
-    def calculate_savings(
-        self, cached_tokens: int, new_tokens: int, original_cost: float
-    ) -> float:
-        return self.current_adapter.calculate_savings(
-            cached_tokens, new_tokens, original_cost
-        )
+    def calculate_savings(self, cached_tokens: int, new_tokens: int, original_cost: float) -> float:
+        return self.current_adapter.calculate_savings(cached_tokens, new_tokens, original_cost)

@@ -1,8 +1,9 @@
-import yaml
-import os
 import logging
+import os
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -105,10 +106,8 @@ DEFAULT_CONFIG = {
 class ConfigManager:
     """Advanced configuration manager with validation and hot reloading."""
 
-    def __init__(self, config_path: Optional[Path] = None):
-        self.config_path = config_path or (
-            Path.home() / ".config" / "aicache" / "config.yaml"
-        )
+    def __init__(self, config_path: Path | None = None):
+        self.config_path = config_path or (Path.home() / ".config" / "aicache" / "config.yaml")
         self.config_dir = self.config_path.parent
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
@@ -123,7 +122,7 @@ class ConfigManager:
         """Load configuration from file."""
         if self.config_path.exists():
             try:
-                with open(self.config_path, "r") as f:
+                with open(self.config_path) as f:
                     user_config = yaml.safe_load(f) or {}
 
                 # Deep merge with defaults
@@ -134,18 +133,12 @@ class ConfigManager:
                 logger.error(f"Failed to load config from {self.config_path}: {e}")
                 logger.info("Using default configuration")
 
-    def _deep_merge(
-        self, default: Dict[str, Any], user: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _deep_merge(self, default: dict[str, Any], user: dict[str, Any]) -> dict[str, Any]:
         """Deep merge user config with defaults."""
         result = default.copy()
 
         for key, value in user.items():
-            if (
-                key in result
-                and isinstance(result[key], dict)
-                and isinstance(value, dict)
-            ):
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
                 result[key] = self._deep_merge(result[key], value)
             else:
                 result[key] = value
@@ -215,7 +208,7 @@ security:
         except Exception as e:
             logger.error(f"Failed to create example config: {e}")
 
-    def get(self, key: str = None, default: Any = None) -> Any:
+    def get(self, key: str | None = None, default: Any = None) -> Any:
         """Get configuration value(s)."""
         if key is None:
             return self._config
@@ -264,7 +257,7 @@ security:
         except Exception as e:
             logger.error(f"Failed to save config: {e}")
 
-    def validate_config(self) -> Dict[str, List[str]]:
+    def validate_config(self) -> dict[str, list[str]]:
         """Validate configuration and return any errors/warnings."""
         errors = []
         warnings = []
@@ -274,9 +267,7 @@ security:
         if cache_dir:
             expanded_dir = Path(os.path.expanduser(cache_dir))
             if not expanded_dir.parent.exists():
-                errors.append(
-                    f"Cache directory parent does not exist: {expanded_dir.parent}"
-                )
+                errors.append(f"Cache directory parent does not exist: {expanded_dir.parent}")
 
         # Validate semantic cache settings
         if self.get("semantic_cache.enabled"):
@@ -286,9 +277,7 @@ security:
 
             threshold = self.get("semantic_cache.similarity_threshold")
             if not (0.0 <= threshold <= 1.0):
-                errors.append(
-                    f"Similarity threshold must be between 0.0 and 1.0, got: {threshold}"
-                )
+                errors.append(f"Similarity threshold must be between 0.0 and 1.0, got: {threshold}")
 
         # Validate team settings
         if self.get("team.enabled"):
@@ -310,14 +299,12 @@ security:
 
         return {"errors": errors, "warnings": warnings, "valid": len(errors) == 0}
 
-    def get_feature_flags(self) -> Dict[str, bool]:
+    def get_feature_flags(self) -> dict[str, bool]:
         """Get all feature flags as a flat dictionary."""
         return {
             "semantic_cache": self.get("semantic_cache.enabled", True),
             "intelligent_management": self.get("intelligent_management.enabled", True),
-            "analytics": self.get(
-                "analytics.enabled", False
-            ),  # Changed default to False
+            "analytics": self.get("analytics.enabled", False),  # Changed default to False
             "team_collaboration": self.get("team.enabled", False),
             "streaming": self.get("streaming.enabled", True),
             "knowledge_graph": self.get("advanced.knowledge_graph", True),
@@ -331,9 +318,7 @@ security:
 
     def export_config(self, filepath: Path, include_defaults: bool = False):
         """Export configuration to file."""
-        config_to_export = (
-            self._config if include_defaults else self._get_non_default_config()
-        )
+        config_to_export = self._config if include_defaults else self._get_non_default_config()
 
         try:
             with open(filepath, "w") as f:
@@ -341,12 +326,10 @@ security:
         except Exception as e:
             logger.error(f"Failed to export config to {filepath}: {e}")
 
-    def _get_non_default_config(self) -> Dict[str, Any]:
+    def _get_non_default_config(self) -> dict[str, Any]:
         """Get only non-default configuration values."""
 
-        def compare_dicts(
-            default: Dict[str, Any], current: Dict[str, Any]
-        ) -> Dict[str, Any]:
+        def compare_dicts(default: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
             result = {}
             for key, value in current.items():
                 if key not in default:
@@ -374,7 +357,7 @@ def get_config_manager() -> ConfigManager:
     return _config_manager
 
 
-def get_config(key: str = None, default: Any = None) -> Any:
+def get_config(key: str | None = None, default: Any = None) -> Any:
     """Get configuration value (backward compatibility)."""
     return get_config_manager().get(key, default)
 
@@ -384,7 +367,7 @@ def set_config(key: str, value: Any, persist: bool = True) -> bool:
     return get_config_manager().set(key, value, persist)
 
 
-def validate_config() -> Dict[str, Any]:
+def validate_config() -> dict[str, Any]:
     """Validate current configuration."""
     return get_config_manager().validate_config()
 

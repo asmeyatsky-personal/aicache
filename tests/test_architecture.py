@@ -9,25 +9,32 @@ These tests validate that:
 5. All layers follow SOLID principles
 """
 
-import pytest
 import asyncio
 import inspect
-from datetime import datetime, timedelta
+from datetime import datetime
 
-from aicache.domain import (
-    CacheEntry, CacheMetadata, CachePolicy, CacheResult,
-    CacheInvalidationEvent, InvalidationStrategy, SemanticMatch,
-    EvictionPolicy, TokenUsageMetrics
-)
+import pytest
+
 from aicache.application import (
-    QueryCacheUseCase, StoreCacheUseCase, InvalidateCacheUseCase,
-    CacheMetricsUseCase
+    CacheMetricsUseCase,
+    InvalidateCacheUseCase,
+    QueryCacheUseCase,
+    StoreCacheUseCase,
+)
+from aicache.domain import (
+    CacheEntry,
+    CacheMetadata,
+    CachePolicy,
+    EvictionPolicy,
 )
 from aicache.infrastructure import (
-    InMemoryStorageAdapter, FileSystemStorageAdapter,
-    SimpleQueryNormalizerAdapter, OpenAITokenCounterAdapter,
-    InMemoryEventPublisherAdapter, InMemoryCacheMetricsAdapter,
-    SimpleSemanticIndexAdapter, SimpleEmbeddingGeneratorAdapter
+    InMemoryCacheMetricsAdapter,
+    InMemoryEventPublisherAdapter,
+    InMemoryStorageAdapter,
+    OpenAITokenCounterAdapter,
+    SimpleEmbeddingGeneratorAdapter,
+    SimpleQueryNormalizerAdapter,
+    SimpleSemanticIndexAdapter,
 )
 
 
@@ -36,11 +43,7 @@ class TestDomainImmutability:
 
     def test_cache_entry_is_immutable(self):
         """Cache entries cannot be modified in place."""
-        entry = CacheEntry(
-            key="test-key",
-            value=b"test-value",
-            created_at=datetime.now()
-        )
+        entry = CacheEntry(key="test-key", value=b"test-value", created_at=datetime.now())
 
         # Verify frozen attribute
         with pytest.raises(AttributeError):
@@ -52,7 +55,7 @@ class TestDomainImmutability:
             key="test-key",
             value=b"test-value",
             created_at=datetime.now(),
-            metadata=CacheMetadata(created_at=datetime.now())
+            metadata=CacheMetadata(created_at=datetime.now()),
         )
 
         touched_entry = entry.touch()
@@ -66,12 +69,7 @@ class TestDomainImmutability:
     def test_cache_entry_ttl_refresh_returns_new_instance(self):
         """TTL refresh returns new instance."""
         now = datetime.now()
-        entry = CacheEntry(
-            key="test-key",
-            value=b"test-value",
-            created_at=now,
-            ttl_seconds=3600
-        )
+        entry = CacheEntry(key="test-key", value=b"test-value", created_at=now, ttl_seconds=3600)
 
         refreshed_entry = entry.refresh_ttl()
 
@@ -87,15 +85,13 @@ class TestDomainImmutability:
             max_size_bytes=1000,
             default_ttl_seconds=3600,
             eviction_policy=EvictionPolicy.LRU,
-            semantic_match_threshold=0.85
+            semantic_match_threshold=0.85,
         )
         assert valid_policy.validate()
 
         # Invalid policy - negative size
         invalid_policy = CachePolicy(
-            max_size_bytes=-100,
-            default_ttl_seconds=3600,
-            eviction_policy=EvictionPolicy.LRU
+            max_size_bytes=-100, default_ttl_seconds=3600, eviction_policy=EvictionPolicy.LRU
         )
         assert not invalid_policy.validate()
 
@@ -111,11 +107,7 @@ class TestPortAbstractions:
         ]
 
         for adapter in adapters:
-            entry = CacheEntry(
-                key="test-key",
-                value=b"test-value",
-                created_at=datetime.now()
-            )
+            entry = CacheEntry(key="test-key", value=b"test-value", created_at=datetime.now())
 
             # Set
             await adapter.set(entry)
@@ -149,8 +141,7 @@ class TestPortAbstractions:
 
         # Similarity
         similarity = normalizer.similarity_score(
-            "what is machine learning",
-            "what is machine learning"
+            "what is machine learning", "what is machine learning"
         )
         assert similarity == 1.0
 
@@ -190,24 +181,24 @@ class TestApplicationUseCases:
             max_size_bytes=1000000,
             default_ttl_seconds=3600,
             eviction_policy=EvictionPolicy.LRU,
-            enable_semantic_caching=True
+            enable_semantic_caching=True,
         )
 
         use_case = QueryCacheUseCase(
-            storage, semantic_index, token_counter, normalizer,
-            embedding_gen, metrics, policy
+            storage, semantic_index, token_counter, normalizer, embedding_gen, metrics, policy
         )
 
         # Generate the cache key like the use case does
         import hashlib
         import json
+
         query = "test query"
         context = None
         hasher = hashlib.sha256()
-        hasher.update(query.encode('utf-8'))
+        hasher.update(query.encode("utf-8"))
         if context:
             sorted_context = json.dumps(context, sort_keys=True)
-            hasher.update(sorted_context.encode('utf-8'))
+            hasher.update(sorted_context.encode("utf-8"))
         cache_key = hasher.hexdigest()
 
         # Store an entry with the correct key
@@ -215,10 +206,7 @@ class TestApplicationUseCases:
             key=cache_key,
             value=b"test-response",
             created_at=datetime.now(),
-            metadata=CacheMetadata(
-                created_at=datetime.now(),
-                normalized_query="test query"
-            )
+            metadata=CacheMetadata(created_at=datetime.now(), normalized_query="test query"),
         )
         await storage.set(entry)
 
@@ -239,12 +227,10 @@ class TestApplicationUseCases:
             max_size_bytes=1000,
             default_ttl_seconds=3600,
             eviction_policy=EvictionPolicy.LRU,
-            enable_semantic_caching=False
+            enable_semantic_caching=False,
         )
 
-        use_case = StoreCacheUseCase(
-            storage, semantic_index, embedding_gen, metrics, policy
-        )
+        use_case = StoreCacheUseCase(storage, semantic_index, embedding_gen, metrics, policy)
 
         # Store entries within size limit
         await use_case.execute("key1", b"x" * 100, ttl_seconds=3600)
@@ -260,16 +246,10 @@ class TestApplicationUseCases:
         event_publisher = InMemoryEventPublisherAdapter()
         metrics = InMemoryCacheMetricsAdapter()
 
-        use_case = InvalidateCacheUseCase(
-            storage, semantic_index, event_publisher, metrics
-        )
+        use_case = InvalidateCacheUseCase(storage, semantic_index, event_publisher, metrics)
 
         # Store entries
-        entry = CacheEntry(
-            key="test-key",
-            value=b"test-value",
-            created_at=datetime.now()
-        )
+        entry = CacheEntry(key="test-key", value=b"test-value", created_at=datetime.now())
         await storage.set(entry)
 
         # Invalidate
@@ -305,42 +285,42 @@ class TestLayerSeparation:
 
     def test_domain_has_no_infrastructure_dependencies(self):
         """Domain layer imports only from domain."""
-        import aicache.domain as domain_module
         import inspect
+
+        import aicache.domain as domain_module
 
         # Get all classes in domain
         domain_classes = [
-            cls for name, cls in inspect.getmembers(domain_module, inspect.isclass)
-            if cls.__module__.startswith('aicache.domain')
+            cls
+            for name, cls in inspect.getmembers(domain_module, inspect.isclass)
+            if cls.__module__.startswith("aicache.domain")
         ]
 
         # Verify none import infrastructure
         for cls in domain_classes:
             source = inspect.getsource(cls)
-            assert 'aicache.infrastructure' not in source
-            assert 'redis' not in source.lower()
-            assert 'postgres' not in source.lower()
+            assert "aicache.infrastructure" not in source
+            assert "redis" not in source.lower()
+            assert "postgres" not in source.lower()
 
     def test_application_only_depends_on_domain(self):
         """Application layer imports only from domain and application."""
-        import aicache.application as app_module
         from aicache.application import use_cases
 
         source = inspect.getsource(use_cases)
 
         # Should import from domain and application, not infrastructure
-        assert 'from ..domain' in source
+        assert "from ..domain" in source
         # Infrastructure imports should be via ports, not concrete classes
-        assert 'InMemoryStorageAdapter' not in source
+        assert "InMemoryStorageAdapter" not in source
 
     def test_infrastructure_implements_ports(self):
         """Infrastructure classes implement port interfaces."""
-        from aicache.domain.ports import (
-            StoragePort, QueryNormalizerPort, TokenCounterPort
-        )
+        from aicache.domain.ports import QueryNormalizerPort, StoragePort, TokenCounterPort
         from aicache.infrastructure import (
-            InMemoryStorageAdapter, SimpleQueryNormalizerAdapter,
-            OpenAITokenCounterAdapter
+            InMemoryStorageAdapter,
+            OpenAITokenCounterAdapter,
+            SimpleQueryNormalizerAdapter,
         )
 
         assert isinstance(InMemoryStorageAdapter(), StoragePort)
@@ -354,17 +334,15 @@ class TestEvolutionAndScalability:
     @pytest.mark.asyncio
     async def test_easy_to_add_new_storage_backend(self):
         """New storage backends can be added without changing domain/app."""
+
         class NewStorageBackendAdapter(InMemoryStorageAdapter):
             """Custom storage implementation."""
+
             pass
 
         # Use it in place of any other storage adapter
         storage = NewStorageBackendAdapter()
-        entry = CacheEntry(
-            key="test",
-            value=b"data",
-            created_at=datetime.now()
-        )
+        entry = CacheEntry(key="test", value=b"data", created_at=datetime.now())
 
         await storage.set(entry)
         retrieved = await storage.get("test")
@@ -373,13 +351,15 @@ class TestEvolutionAndScalability:
     @pytest.mark.asyncio
     async def test_multiple_normalizers_work_interchangeably(self):
         """Different normalizers work with same code."""
+
         class AggressiveNormalizerAdapter(SimpleQueryNormalizerAdapter):
             def normalize(self, query: str) -> str:
                 # More aggressive normalization
                 import re
+
                 normalized = query.lower()
                 # Remove punctuation
-                normalized = re.sub(r'[^\w\s]', '', normalized)
+                normalized = re.sub(r"[^\w\s]", "", normalized)
                 return normalized
 
         normalizer1 = SimpleQueryNormalizerAdapter()
@@ -418,11 +398,7 @@ class TestEventDrivenInvalidation:
         service = CacheInvalidationService(storage, semantic_index, event_publisher)
 
         # Store an entry first so deletion succeeds
-        entry = CacheEntry(
-            key="test-key",
-            value=b"test",
-            created_at=datetime.now()
-        )
+        entry = CacheEntry(key="test-key", value=b"test", created_at=datetime.now())
         await storage.set(entry)
 
         # Invalidate

@@ -7,13 +7,14 @@ Provides storage, retrieval, and export capabilities for TOON operations.
 
 import json
 import logging
-from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pathlib import Path
+from typing import Any
+
 import msgpack
 
-from ..domain.toon import TOONCacheOperation, TOONAnalytics, TOONOperationType
 from ..domain.ports import TOONRepositoryPort
+from ..domain.toon import TOONAnalytics, TOONCacheOperation, TOONOperationType
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ class InMemoryTOONRepositoryAdapter(TOONRepositoryPort):
     """
 
     def __init__(self):
-        self.toons: Dict[str, TOONCacheOperation] = {}
+        self.toons: dict[str, TOONCacheOperation] = {}
 
     async def save_toon(self, toon: TOONCacheOperation) -> bool:
         """Save TOON operation to memory."""
@@ -37,18 +38,20 @@ class InMemoryTOONRepositoryAdapter(TOONRepositoryPort):
             logger.error(f"Error saving TOON: {e}")
             return False
 
-    async def get_toon(self, operation_id: str) -> Optional[TOONCacheOperation]:
+    async def get_toon(self, operation_id: str) -> TOONCacheOperation | None:
         """Retrieve TOON from memory."""
         return self.toons.get(operation_id)
 
-    async def get_all_toons(self, limit: Optional[int] = None) -> List[TOONCacheOperation]:
+    async def get_all_toons(self, limit: int | None = None) -> list[TOONCacheOperation]:
         """Get all TOONs from memory."""
         toons = list(self.toons.values())
         if limit:
             toons = toons[-limit:]  # Return most recent
         return toons
 
-    async def get_toons_by_type(self, operation_type: TOONOperationType) -> List[TOONCacheOperation]:
+    async def get_toons_by_type(
+        self, operation_type: TOONOperationType
+    ) -> list[TOONCacheOperation]:
         """Get TOONs filtered by operation type."""
         return [t for t in self.toons.values() if t.operation_type == operation_type]
 
@@ -89,7 +92,7 @@ class FileSystemTOONRepositoryAdapter(TOONRepositoryPort):
             path.parent.mkdir(parents=True, exist_ok=True)
 
             toon_dict = toon.to_dict()
-            with open(path, 'w') as f:
+            with open(path, "w") as f:
                 json.dump(toon_dict, f, indent=2)
 
             logger.debug(f"Saved TOON to {path}")
@@ -98,14 +101,14 @@ class FileSystemTOONRepositoryAdapter(TOONRepositoryPort):
             logger.error(f"Error saving TOON: {e}")
             return False
 
-    async def get_toon(self, operation_id: str) -> Optional[TOONCacheOperation]:
+    async def get_toon(self, operation_id: str) -> TOONCacheOperation | None:
         """Retrieve TOON from JSON file."""
         try:
             path = self._get_toon_path(operation_id)
             if not path.exists():
                 return None
 
-            with open(path, 'r') as f:
+            with open(path) as f:
                 data = json.load(f)
 
             return self._dict_to_toon(data)
@@ -113,14 +116,14 @@ class FileSystemTOONRepositoryAdapter(TOONRepositoryPort):
             logger.error(f"Error loading TOON: {e}")
             return None
 
-    async def get_all_toons(self, limit: Optional[int] = None) -> List[TOONCacheOperation]:
+    async def get_all_toons(self, limit: int | None = None) -> list[TOONCacheOperation]:
         """Get all TOONs from files."""
         toons = []
         try:
             for json_file in sorted(self.base_dir.glob("*/*.json"), reverse=True):
                 if limit and len(toons) >= limit:
                     break
-                with open(json_file, 'r') as f:
+                with open(json_file) as f:
                     data = json.load(f)
                     toon = self._dict_to_toon(data)
                     if toon:
@@ -130,12 +133,14 @@ class FileSystemTOONRepositoryAdapter(TOONRepositoryPort):
 
         return toons
 
-    async def get_toons_by_type(self, operation_type: TOONOperationType) -> List[TOONCacheOperation]:
+    async def get_toons_by_type(
+        self, operation_type: TOONOperationType
+    ) -> list[TOONCacheOperation]:
         """Get TOONs filtered by operation type."""
         toons = []
         try:
             for json_file in self.base_dir.glob("*/*.json"):
-                with open(json_file, 'r') as f:
+                with open(json_file) as f:
                     data = json.load(f)
                     if data.get("operation_type") == operation_type.value:
                         toon = self._dict_to_toon(data)
@@ -171,10 +176,11 @@ class FileSystemTOONRepositoryAdapter(TOONRepositoryPort):
         return count
 
     @staticmethod
-    def _dict_to_toon(data: Dict[str, Any]) -> Optional[TOONCacheOperation]:
+    def _dict_to_toon(data: dict[str, Any]) -> TOONCacheOperation | None:
         """Convert dictionary to TOON object."""
         try:
             from ..domain.toon import TokenDelta, TOONOperationType
+
             token_delta_data = data.get("token_delta", {})
             token_delta = TokenDelta(
                 prompt_tokens=token_delta_data.get("prompt_tokens", 0),
@@ -187,7 +193,9 @@ class FileSystemTOONRepositoryAdapter(TOONRepositoryPort):
             )
             return TOONCacheOperation(
                 operation_id=data.get("operation_id", ""),
-                timestamp=datetime.fromisoformat(data["timestamp"]) if isinstance(data.get("timestamp"), str) else datetime.now(),
+                timestamp=datetime.fromisoformat(data["timestamp"])
+                if isinstance(data.get("timestamp"), str)
+                else datetime.now(),
                 operation_type=TOONOperationType(data.get("operation_type", "cache_miss")),
                 original_query=data.get("original_query", ""),
                 normalized_query=data.get("normalized_query", ""),
@@ -214,19 +222,19 @@ class TOONExportService:
     def __init__(self, repository: TOONRepositoryPort):
         self.repository = repository
 
-    async def export_to_json(self, limit: Optional[int] = None) -> str:
+    async def export_to_json(self, limit: int | None = None) -> str:
         """Export TOONs as JSON array."""
         toons = await self.repository.get_all_toons(limit)
         toon_dicts = [t.to_dict() for t in toons]
         return json.dumps(toon_dicts, indent=2)
 
-    async def export_to_jsonl(self, limit: Optional[int] = None) -> str:
+    async def export_to_jsonl(self, limit: int | None = None) -> str:
         """Export TOONs as JSONL (one JSON per line)."""
         toons = await self.repository.get_all_toons(limit)
         lines = [json.dumps(t.to_dict()) for t in toons]
         return "\n".join(lines)
 
-    async def export_to_csv(self, limit: Optional[int] = None) -> str:
+    async def export_to_csv(self, limit: int | None = None) -> str:
         """Export TOONs as CSV."""
         toons = await self.repository.get_all_toons(limit)
         if not toons:
@@ -245,7 +253,7 @@ class TOONExportService:
 
         return "\n".join(csv_lines)
 
-    async def export_to_msgpack(self, limit: Optional[int] = None) -> bytes:
+    async def export_to_msgpack(self, limit: int | None = None) -> bytes:
         """Export TOONs as binary msgpack format (compact)."""
         toons = await self.repository.get_all_toons(limit)
         compact_dicts = [t.to_compact_dict() for t in toons]
@@ -300,10 +308,11 @@ class TOONQueryBuilder:
 
     def with_min_similarity(self, min_score: float) -> "TOONQueryBuilder":
         """Filter by minimum similarity score."""
-        self.filters.append(lambda t: (
-            t.semantic_data.similarity_score and
-            t.semantic_data.similarity_score >= min_score
-        ))
+        self.filters.append(
+            lambda t: (
+                t.semantic_data.similarity_score and t.semantic_data.similarity_score >= min_score
+            )
+        )
         return self
 
     def with_time_range(self, start: datetime, end: datetime) -> "TOONQueryBuilder":
@@ -316,7 +325,7 @@ class TOONQueryBuilder:
         self.filters.append(lambda t: t.optimization_insight.optimization_level == level)
         return self
 
-    async def execute(self) -> List[TOONCacheOperation]:
+    async def execute(self) -> list[TOONCacheOperation]:
         """Execute query with all filters."""
         toons = await self.repository.get_all_toons()
 

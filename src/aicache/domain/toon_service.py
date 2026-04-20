@@ -13,16 +13,23 @@ Architecture:
 """
 
 import logging
-import uuid
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from typing import Any
+
+from .models import CacheEntry, CacheResult, EvictionPolicy
+from .ports import CacheMetricsPort, StoragePort, TokenCounterPort
 from .toon import (
-    TOONCacheOperation, TOONQueryMetadata, TOONTokenDelta, TOONSemanticMatchData,
-    TOONCacheMetadata, TOONOptimizationInsight, TOONAnalytics,
-    TOONOperationType, TOONOptimizationLevel, TOONStrategy
+    TOONAnalytics,
+    TOONCacheMetadata,
+    TOONCacheOperation,
+    TOONOperationType,
+    TOONOptimizationInsight,
+    TOONOptimizationLevel,
+    TOONQueryMetadata,
+    TOONSemanticMatchData,
+    TOONStrategy,
+    TOONTokenDelta,
 )
-from .models import CacheEntry, CacheResult, TokenUsageMetrics, EvictionPolicy
-from .ports import StoragePort, TokenCounterPort, CacheMetricsPort
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +42,9 @@ class TOONGenerationService:
     capturing comprehensive optimization metadata for every cache interaction.
     """
 
-    def __init__(self, storage: StoragePort, token_counter: TokenCounterPort,
-                 metrics_port: CacheMetricsPort):
+    def __init__(
+        self, storage: StoragePort, token_counter: TokenCounterPort, metrics_port: CacheMetricsPort
+    ):
         self.storage = storage
         self.token_counter = token_counter
         self.metrics_port = metrics_port
@@ -48,14 +56,14 @@ class TOONGenerationService:
         normalized_query: str,
         query_hash: str,
         cache_result: CacheResult,
-        cache_entry: Optional[CacheEntry],
+        cache_entry: CacheEntry | None,
         prompt_tokens_without_cache: int,
         model: str,
         duration_ms: float,
         semantic_match: bool = False,
-        context: Optional[Dict[str, Any]] = None,
-        semantic_tags: Optional[List[str]] = None,
-        intent: Optional[str] = None,
+        context: dict[str, Any] | None = None,
+        semantic_tags: list[str] | None = None,
+        intent: str | None = None,
     ) -> TOONCacheOperation:
         """
         Generate a TOON object from a cache hit.
@@ -64,22 +72,24 @@ class TOONGenerationService:
         """
         # Determine operation type
         if semantic_match:
-            operation_type = TOONOperationType.SEMANTIC_HIT if cache_result.similarity_score and cache_result.similarity_score >= 0.85 else TOONOperationType.SEMANTIC_MISS
+            operation_type = (
+                TOONOperationType.SEMANTIC_HIT
+                if cache_result.similarity_score and cache_result.similarity_score >= 0.85
+                else TOONOperationType.SEMANTIC_MISS
+            )
             strategy = TOONStrategy.SEMANTIC
         else:
             operation_type = TOONOperationType.EXACT_HIT
             strategy = TOONStrategy.EXACT
 
         # Calculate token metrics
-        cached_response = cache_result.value.decode() if cache_result.value else ""
+        cache_result.value.decode() if cache_result.value else ""
         with_cache_prompt = 0  # Cache hit = no new prompt tokens
         cost_with_cache = 0.0
 
         saved_prompt = prompt_tokens_without_cache
         saved_total = prompt_tokens_without_cache
-        cost_without_cache = self.token_counter.estimate_cost(
-            model, prompt_tokens_without_cache, 0
-        )
+        cost_without_cache = self.token_counter.estimate_cost(model, prompt_tokens_without_cache, 0)
         cost_saved = cost_without_cache
 
         token_delta = TOONTokenDelta(
@@ -105,7 +115,9 @@ class TOONGenerationService:
             similarity_score=cache_result.similarity_score if semantic_match else None,
             confidence=cache_result.confidence if semantic_match else None,
             matched_entry_key=cache_result.entry_key,
-            semantic_distance=1.0 - (cache_result.similarity_score or 0.0) if semantic_match else None,
+            semantic_distance=1.0 - (cache_result.similarity_score or 0.0)
+            if semantic_match
+            else None,
             embedding_dimension=384 if semantic_match else None,
             similarity_threshold_used=0.85,
             threshold_met=semantic_match,
@@ -121,8 +133,12 @@ class TOONGenerationService:
             cache_key=cache_result.entry_key or query_hash,
             cache_age_seconds=cache_age,
             ttl_remaining_seconds=ttl_remaining,
-            access_count=cache_entry.metadata.accessed_count if cache_entry and cache_entry.metadata else 0,
-            last_accessed=cache_entry.metadata.last_accessed_at if cache_entry and cache_entry.metadata else None,
+            access_count=cache_entry.metadata.accessed_count
+            if cache_entry and cache_entry.metadata
+            else 0,
+            last_accessed=cache_entry.metadata.last_accessed_at
+            if cache_entry and cache_entry.metadata
+            else None,
             created_at=cache_entry.created_at if cache_entry else datetime.now(),
             memory_size_bytes=cache_entry.get_size_bytes() if cache_entry else 0,
             eviction_policy=EvictionPolicy.LRU.value,
@@ -168,9 +184,9 @@ class TOONGenerationService:
         model: str,
         duration_ms: float,
         semantic_attempted: bool = False,
-        context: Optional[Dict[str, Any]] = None,
-        semantic_tags: Optional[List[str]] = None,
-        intent: Optional[str] = None,
+        context: dict[str, Any] | None = None,
+        semantic_tags: list[str] | None = None,
+        intent: str | None = None,
     ) -> TOONCacheOperation:
         """
         Generate a TOON object from a cache miss.
@@ -269,7 +285,7 @@ class TOONGenerationService:
     def _generate_optimization_insight(
         self,
         token_delta: TOONTokenDelta,
-        cache_entry: Optional[CacheEntry],
+        cache_entry: CacheEntry | None,
         semantic_match: bool = False,
     ) -> TOONOptimizationInsight:
         """Generate optimization insights from cache hit data."""
@@ -302,7 +318,9 @@ class TOONGenerationService:
         cache_efficiency = 1.0 if cache_entry else 0.0
 
         # Eviction risk (higher access count = lower risk)
-        access_count = cache_entry.metadata.accessed_count if cache_entry and cache_entry.metadata else 0
+        access_count = (
+            cache_entry.metadata.accessed_count if cache_entry and cache_entry.metadata else 0
+        )
         eviction_risk = "low" if access_count > 5 else "medium" if access_count > 2 else "high"
 
         return TOONOptimizationInsight(
@@ -330,7 +348,7 @@ class TOONAnalyticsService:
 
     def aggregate_toons(
         self,
-        toon_operations: List[TOONCacheOperation],
+        toon_operations: list[TOONCacheOperation],
         time_period_start: datetime,
         time_period_end: datetime,
     ) -> TOONAnalytics:
@@ -357,9 +375,15 @@ class TOONAnalyticsService:
             )
 
         # Count operation types
-        exact_hits = sum(1 for op in toon_operations if op.operation_type == TOONOperationType.EXACT_HIT)
-        semantic_hits = sum(1 for op in toon_operations if op.operation_type == TOONOperationType.SEMANTIC_HIT)
-        intent_hits = sum(1 for op in toon_operations if op.operation_type == TOONOperationType.INTENT_HIT)
+        exact_hits = sum(
+            1 for op in toon_operations if op.operation_type == TOONOperationType.EXACT_HIT
+        )
+        semantic_hits = sum(
+            1 for op in toon_operations if op.operation_type == TOONOperationType.SEMANTIC_HIT
+        )
+        intent_hits = sum(
+            1 for op in toon_operations if op.operation_type == TOONOperationType.INTENT_HIT
+        )
         misses = sum(1 for op in toon_operations if "miss" in op.operation_type.value)
 
         # Aggregate token savings
@@ -367,20 +391,32 @@ class TOONAnalyticsService:
         total_cost_saved = sum(op.token_delta.cost_saved for op in toon_operations)
 
         # Calculate average savings percent
-        avg_savings_percent = sum(
-            op.token_delta.saved_percent for op in toon_operations
-        ) / len(toon_operations) if toon_operations else 0.0
+        avg_savings_percent = (
+            sum(op.token_delta.saved_percent for op in toon_operations) / len(toon_operations)
+            if toon_operations
+            else 0.0
+        )
 
         # Calculate average ROI
-        avg_roi = sum(
-            op.optimization_insight.roi_score for op in toon_operations
-        ) / len(toon_operations) if toon_operations else 0.0
+        avg_roi = (
+            sum(op.optimization_insight.roi_score for op in toon_operations) / len(toon_operations)
+            if toon_operations
+            else 0.0
+        )
 
         # Calculate efficiency trend (simplified)
-        first_half = toon_operations[:len(toon_operations)//2]
-        second_half = toon_operations[len(toon_operations)//2:]
-        first_half_roi = sum(op.optimization_insight.roi_score for op in first_half) / len(first_half) if first_half else 0.0
-        second_half_roi = sum(op.optimization_insight.roi_score for op in second_half) / len(second_half) if second_half else 0.0
+        first_half = toon_operations[: len(toon_operations) // 2]
+        second_half = toon_operations[len(toon_operations) // 2 :]
+        first_half_roi = (
+            sum(op.optimization_insight.roi_score for op in first_half) / len(first_half)
+            if first_half
+            else 0.0
+        )
+        second_half_roi = (
+            sum(op.optimization_insight.roi_score for op in second_half) / len(second_half)
+            if second_half
+            else 0.0
+        )
         efficiency_trend = second_half_roi - first_half_roi
 
         return TOONAnalytics(
@@ -399,7 +435,7 @@ class TOONAnalyticsService:
             cache_efficiency_trend=efficiency_trend,
         )
 
-    def extract_insights(self, analytics: TOONAnalytics) -> Dict[str, Any]:
+    def extract_insights(self, analytics: TOONAnalytics) -> dict[str, Any]:
         """
         Extract actionable insights from TOON analytics.
 
@@ -420,11 +456,17 @@ class TOONAnalyticsService:
                 "total_cost_saved": round(analytics.total_cost_saved, 6),
                 "average_tokens_per_operation": round(
                     analytics.total_tokens_saved / analytics.total_operations, 1
-                ) if analytics.total_operations > 0 else 0,
+                )
+                if analytics.total_operations > 0
+                else 0,
             },
             "efficiency": {
                 "roi_score": round(analytics.average_roi_score, 4),
-                "efficiency_trend": "improving" if analytics.cache_efficiency_trend > 0 else "declining" if analytics.cache_efficiency_trend < 0 else "stable",
+                "efficiency_trend": "improving"
+                if analytics.cache_efficiency_trend > 0
+                else "declining"
+                if analytics.cache_efficiency_trend < 0
+                else "stable",
                 "trend_magnitude": round(abs(analytics.cache_efficiency_trend), 4),
             },
             "recommendations": self._generate_recommendations(analytics),
@@ -432,21 +474,32 @@ class TOONAnalyticsService:
 
         return insights
 
-    def _generate_recommendations(self, analytics: TOONAnalytics) -> List[str]:
+    def _generate_recommendations(self, analytics: TOONAnalytics) -> list[str]:
         """Generate recommendations based on analytics."""
         recommendations = []
 
         if analytics.hit_rate() < 30:
-            recommendations.append("Low cache hit rate - consider expanding semantic threshold or enabling intent matching")
+            recommendations.append(
+                "Low cache hit rate - consider expanding semantic threshold or enabling intent matching"
+            )
 
-        if analytics.semantic_hit_rate() > 50 and analytics.semantic_hit_rate() > analytics.hit_rate() * 0.5:
-            recommendations.append("Semantic caching is effective - increase similarity threshold to reduce false positives")
+        if (
+            analytics.semantic_hit_rate() > 50
+            and analytics.semantic_hit_rate() > analytics.hit_rate() * 0.5
+        ):
+            recommendations.append(
+                "Semantic caching is effective - increase similarity threshold to reduce false positives"
+            )
 
         if analytics.average_token_savings_percent > 70:
-            recommendations.append("Excellent token savings - monitor cache retention and TTL settings")
+            recommendations.append(
+                "Excellent token savings - monitor cache retention and TTL settings"
+            )
 
         if analytics.cache_efficiency_trend < 0:
-            recommendations.append("Cache efficiency declining - investigate cache staleness and eviction policy")
+            recommendations.append(
+                "Cache efficiency declining - investigate cache staleness and eviction policy"
+            )
 
         if not recommendations:
             recommendations.append("Cache performance is optimal")

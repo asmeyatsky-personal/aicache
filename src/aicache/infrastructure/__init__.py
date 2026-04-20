@@ -1,23 +1,40 @@
-"""Infrastructure layer: Adapter implementations for external dependencies."""
+"""Infrastructure layer: adapters + composition root."""
 
 from .adapters import (
-    InMemoryStorageAdapter,
     FileSystemStorageAdapter,
-    SimpleQueryNormalizerAdapter,
-    OpenAITokenCounterAdapter,
-    InMemoryEventPublisherAdapter,
     InMemoryCacheMetricsAdapter,
-    SimpleSemanticIndexAdapter,
+    InMemoryEventPublisherAdapter,
+    InMemoryStorageAdapter,
+    OpenAITokenCounterAdapter,
     SimpleEmbeddingGeneratorAdapter,
+    SimpleQueryNormalizerAdapter,
+    SimpleSemanticIndexAdapter,
+)
+from .container import Container, build_container, get_container, reset_container
+from .telemetry import (
+    InMemoryTelemetryAdapter,
+    JSONLTelemetryAdapter,
+    configure_structured_logging,
+    summarise,
+    traced,
 )
 
 __all__ = [
-    "InMemoryStorageAdapter",
+    "Container",
     "FileSystemStorageAdapter",
-    "SimpleQueryNormalizerAdapter",
-    "OpenAITokenCounterAdapter",
-    "InMemoryEventPublisherAdapter",
     "InMemoryCacheMetricsAdapter",
-    "SimpleSemanticIndexAdapter",
+    "InMemoryEventPublisherAdapter",
+    "InMemoryStorageAdapter",
+    "InMemoryTelemetryAdapter",
+    "JSONLTelemetryAdapter",
+    "OpenAITokenCounterAdapter",
     "SimpleEmbeddingGeneratorAdapter",
+    "SimpleQueryNormalizerAdapter",
+    "SimpleSemanticIndexAdapter",
+    "build_container",
+    "configure_structured_logging",
+    "get_container",
+    "reset_container",
+    "summarise",
+    "traced",
 ]

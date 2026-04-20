@@ -5,22 +5,18 @@ Bridges provider-specific prompt caching (OpenAI/Anthropic/Google) with
 the core cache system. Tracks savings across providers and generates reports.
 """
 
+import json
 import logging
 import time
-import json
-from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from ..domain.prompt_caching import (
-    PromptCachePort,
-    PromptCacheResult,
-    PromptCacheConfig,
     CacheProvider,
     MultiProviderPromptCachePort,
-    OpenAIPromptCacheAdapter,
-    AnthropicPromptCacheAdapter,
-    GooglePromptCacheAdapter,
+    PromptCacheConfig,
+    PromptCacheResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,20 +34,20 @@ class PromptCacheService:
     - Persist savings history to disk
     """
 
-    def __init__(self, data_dir: Optional[str] = None):
+    def __init__(self, data_dir: str | None = None):
         self._multi_provider = MultiProviderPromptCachePort()
         self._data_dir = Path(data_dir or Path.home() / ".cache" / "aicache" / "prompt_cache")
         self._data_dir.mkdir(parents=True, exist_ok=True)
         self._history_file = self._data_dir / "savings_history.json"
         self._history = self._load_history()
 
-    def _load_history(self) -> Dict[str, Any]:
+    def _load_history(self) -> dict[str, Any]:
         """Load savings history from disk."""
         if self._history_file.exists():
             try:
-                with open(self._history_file, "r") as f:
+                with open(self._history_file) as f:
                     return json.load(f)
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 pass
         return {
             "total_queries": 0,
@@ -67,7 +63,7 @@ class PromptCacheService:
         try:
             with open(self._history_file, "w") as f:
                 json.dump(self._history, f, indent=2)
-        except IOError:
+        except OSError:
             logger.warning("Failed to save prompt cache history")
 
     def set_provider(self, provider: str) -> bool:
@@ -91,8 +87,8 @@ class PromptCacheService:
 
     async def check_and_cache(
         self,
-        messages: List[Dict[str, str]],
-        model: Optional[str] = None,
+        messages: list[dict[str, str]],
+        model: str | None = None,
     ) -> PromptCacheResult:
         """
         Check if messages can benefit from prompt caching,
@@ -143,12 +139,14 @@ class PromptCacheService:
         today = datetime.now().strftime("%Y-%m-%d")
         daily = self._history["daily_savings"]
         if not daily or daily[-1].get("date") != today:
-            daily.append({
-                "date": today,
-                "queries": 0,
-                "hits": 0,
-                "tokens_saved": 0,
-            })
+            daily.append(
+                {
+                    "date": today,
+                    "queries": 0,
+                    "hits": 0,
+                    "tokens_saved": 0,
+                }
+            )
         daily[-1]["queries"] += 1
         if result.cache_hit:
             daily[-1]["hits"] += 1
@@ -160,7 +158,7 @@ class PromptCacheService:
 
         self._save_history()
 
-    def get_savings_report(self, days: int = 30) -> Dict[str, Any]:
+    def get_savings_report(self, days: int = 30) -> dict[str, Any]:
         """Generate a savings report for the specified period."""
         cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
         daily = self._history.get("daily_savings", [])
@@ -175,13 +173,10 @@ class PromptCacheService:
         provider_savings = {}
         for provider, pdata in self._history.get("by_provider", {}).items():
             if provider == "openai":
-                cost_per_1k = 0.075  # cached rate
                 savings_per_1k = 0.075  # 50% savings
             elif provider == "anthropic":
-                cost_per_1k = 0.0003
                 savings_per_1k = 0.0027  # 90% savings
             else:
-                cost_per_1k = 0.000125
                 savings_per_1k = 0.000375  # 75% savings
 
             estimated_savings = (pdata["tokens_saved"] / 1000) * savings_per_1k
@@ -190,7 +185,9 @@ class PromptCacheService:
                 "hits": pdata["hits"],
                 "tokens_saved": pdata["tokens_saved"],
                 "estimated_savings": round(estimated_savings, 4),
-                "hit_rate": (pdata["hits"] / pdata["queries"] * 100) if pdata["queries"] > 0 else 0.0,
+                "hit_rate": (pdata["hits"] / pdata["queries"] * 100)
+                if pdata["queries"] > 0
+                else 0.0,
             }
 
         total_estimated_savings = sum(p["estimated_savings"] for p in provider_savings.values())
@@ -212,7 +209,7 @@ class PromptCacheService:
             },
         }
 
-    def get_provider_info(self) -> List[Dict[str, Any]]:
+    def get_provider_info(self) -> list[dict[str, Any]]:
         """Get info about all configured providers."""
         providers = []
         for provider_enum in CacheProvider:
@@ -222,14 +219,16 @@ class PromptCacheService:
                 is_active = provider_enum == self._multi_provider._current_provider
                 prov_stats = self._history.get("by_provider", {}).get(provider_enum.value, {})
 
-                providers.append({
-                    "name": provider_enum.value,
-                    "active": is_active,
-                    "auto_cache": config.auto_cache_enabled,
-                    "min_tokens": config.cache_min_tokens,
-                    "ttl_seconds": config.cache_ttl_seconds,
-                    "queries": prov_stats.get("queries", 0),
-                    "hits": prov_stats.get("hits", 0),
-                    "tokens_saved": prov_stats.get("tokens_saved", 0),
-                })
+                providers.append(
+                    {
+                        "name": provider_enum.value,
+                        "active": is_active,
+                        "auto_cache": config.auto_cache_enabled,
+                        "min_tokens": config.cache_min_tokens,
+                        "ttl_seconds": config.cache_ttl_seconds,
+                        "queries": prov_stats.get("queries", 0),
+                        "hits": prov_stats.get("hits", 0),
+                        "tokens_saved": prov_stats.get("tokens_saved", 0),
+                    }
+                )
         return providers

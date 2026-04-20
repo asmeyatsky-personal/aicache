@@ -6,14 +6,13 @@ These tests validate the prompt caching functionality that incorporates
 """
 
 import pytest
+
 from aicache.domain.prompt_caching import (
-    PromptCachePort,
-    OpenAIPromptCacheAdapter,
     AnthropicPromptCacheAdapter,
+    CacheProvider,
     GooglePromptCacheAdapter,
     MultiProviderPromptCachePort,
-    CacheProvider,
-    PromptCacheConfig,
+    OpenAIPromptCacheAdapter,
     PromptCacheResult,
 )
 
@@ -80,9 +79,7 @@ class TestOpenAIPromptCache:
         adapter = OpenAIPromptCacheAdapter()
 
         # Test with known values - just verify it runs without error
-        savings = adapter.calculate_savings(
-            cached_tokens=1000, new_tokens=500, original_cost=0.10
-        )
+        savings = adapter.calculate_savings(cached_tokens=1000, new_tokens=500, original_cost=0.10)
 
         # Function runs and returns a value (could be positive or negative depending on formula)
         assert isinstance(savings, float)

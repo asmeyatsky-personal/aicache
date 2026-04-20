@@ -7,63 +7,57 @@ domain/ports, cache_factory, and mcp_server modules.
 
 import asyncio
 import json
-import os
 import shutil
 import tempfile
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-# ============================================================
-# Module imports
-# ============================================================
-from aicache.security import (
-    SecurityUtils,
-    sanitize_input,
-    detect_pii,
-    mask_pii,
-    is_safe_prompt,
-    validate_context,
-)
-from aicache.config import ConfigManager, DEFAULT_CONFIG
+from aicache.cache_factory import CacheFactory, create_cache, get_cache
+from aicache.config import ConfigManager
 from aicache.core.cache import CoreCache
 from aicache.domain.models import (
     CacheEntry,
+    CacheInvalidationEvent,
     CacheMetadata,
+    CacheMetrics,
     CachePolicy,
     CacheResult,
-    CacheInvalidationEvent,
-    CacheMetrics,
     EvictionPolicy,
     InvalidationStrategy,
     SemanticMatch,
     TokenUsageMetrics,
 )
 from aicache.domain.ports import (
-    StoragePort,
-    SemanticIndexPort,
-    TokenCounterPort,
-    EventPublisherPort,
-    QueryNormalizerPort,
     CacheMetricsPort,
     EmbeddingGeneratorPort,
+    EventPublisherPort,
+    QueryNormalizerPort,
     RepositoryPort,
+    SemanticIndexPort,
+    StoragePort,
+    TokenCounterPort,
     TOONRepositoryPort,
 )
 from aicache.domain.services import (
     CacheEvictionService,
-    CacheInvalidationService,
     CacheTTLService,
-    QueryNormalizationService,
-    SemanticCachingService,
-    TokenCountingService,
 )
-from aicache.cache_factory import CacheFactory, get_cache, create_cache
-from aicache.mcp_server import MCPConnection, MCPRequest, MCPResponse
+
+# ============================================================
+# Module imports
+# ============================================================
+from aicache.security import (
+    SecurityUtils,
+    detect_pii,
+    is_safe_prompt,
+    mask_pii,
+    sanitize_input,
+    validate_context,
+)
 
 
 # ============================================================
@@ -82,8 +76,8 @@ def run_async(coro):
 # 1. SECURITY MODULE TESTS
 # ############################################################
 
-class TestSecuritySanitizeInput:
 
+class TestSecuritySanitizeInput:
     def test_sanitize_removes_null_bytes(self):
         su = SecurityUtils()
         result = su.sanitize_input("hello\x00world")
@@ -122,7 +116,6 @@ class TestSecuritySanitizeInput:
 
 
 class TestSecurityDetectPII:
-
     def test_detect_openai_api_key(self):
         su = SecurityUtils()
         text = "My key is sk-abcdefghijklmnopqrstuvwxyz1234"
@@ -164,7 +157,6 @@ class TestSecurityDetectPII:
 
 
 class TestSecurityMaskPII:
-
     def test_mask_api_key(self):
         su = SecurityUtils()
         text = "Key: sk-abcdefghijklmnopqrstuvwxyz1234"
@@ -191,7 +183,6 @@ class TestSecurityMaskPII:
 
 
 class TestSecurityIsSafePrompt:
-
     def test_safe_normal_prompt(self):
         su = SecurityUtils()
         assert su.is_safe_prompt("What is the capital of France?") is True
@@ -226,7 +217,6 @@ class TestSecurityIsSafePrompt:
 
 
 class TestSecurityValidateContext:
-
     def test_validate_none_returns_empty(self):
         su = SecurityUtils()
         result = su.validate_context(None)
@@ -276,7 +266,6 @@ class TestSecurityValidateContext:
 
 
 class TestSecurityUtilsCustomPatterns:
-
     def test_custom_patterns_from_config(self):
         su = SecurityUtils(config={"sensitive_patterns": [("my_custom_secret", "CUSTOM_SECRET")]})
         findings = su.detect_pii("this has my_custom_secret inside")
@@ -294,8 +283,8 @@ class TestSecurityUtilsCustomPatterns:
 # 2. CONFIG MODULE TESTS
 # ############################################################
 
-class TestConfigManager:
 
+class TestConfigManager:
     def _make_manager(self, yaml_content=None):
         """Create a ConfigManager with a temp config directory."""
         tmpdir = tempfile.mkdtemp()
@@ -425,6 +414,7 @@ class TestConfigManager:
             mgr.export_config(export_path, include_defaults=True)
             assert export_path.exists()
             import yaml
+
             with open(export_path) as f:
                 data = yaml.safe_load(f)
             assert "cache_dir" in data
@@ -436,8 +426,8 @@ class TestConfigManager:
 # 3. CORE CACHE TESTS
 # ############################################################
 
-class TestCoreCachePathTraversal:
 
+class TestCoreCachePathTraversal:
     def test_path_traversal_attack_rejected(self):
         tmpdir = tempfile.mkdtemp()
         try:
@@ -469,7 +459,6 @@ class TestCoreCachePathTraversal:
 
 
 class TestCoreCacheGetValue:
-
     def test_get_value_returns_string(self):
         tmpdir = tempfile.mkdtemp()
         try:
@@ -492,7 +481,6 @@ class TestCoreCacheGetValue:
 
 
 class TestCoreCacheTTL:
-
     def test_expired_entry_returns_none(self):
         tmpdir = tempfile.mkdtemp()
         try:
@@ -523,7 +511,6 @@ class TestCoreCacheTTL:
 
 
 class TestCoreCacheIndex:
-
     def test_index_file_created(self):
         tmpdir = tempfile.mkdtemp()
         try:
@@ -567,8 +554,8 @@ class TestCoreCacheIndex:
 # 4. DOMAIN MODELS TESTS
 # ############################################################
 
-class TestCacheResult:
 
+class TestCacheResult:
     def test_create_hit(self):
         result = CacheResult.create_hit(value=b"hello", entry_key="k1", response_time_ms=1.5)
         assert result.hit is True
@@ -584,8 +571,11 @@ class TestCacheResult:
 
     def test_create_semantic_hit(self):
         result = CacheResult.create_semantic_hit(
-            value=b"data", entry_key="k2",
-            similarity_score=0.92, confidence=0.88, response_time_ms=5.0
+            value=b"data",
+            entry_key="k2",
+            similarity_score=0.92,
+            confidence=0.88,
+            response_time_ms=5.0,
         )
         assert result.hit is True
         assert result.similarity_score == 0.92
@@ -599,7 +589,6 @@ class TestCacheResult:
 
 
 class TestDomainCacheEntry:
-
     def test_empty_key_raises_value_error(self):
         with pytest.raises(ValueError, match="key cannot be empty"):
             CacheEntry(key="", value=b"data", created_at=datetime.now())
@@ -612,14 +601,16 @@ class TestDomainCacheEntry:
         now = datetime.now()
         with pytest.raises(ValueError, match="Expiration time must be after"):
             CacheEntry(
-                key="k1", value=b"data",
+                key="k1",
+                value=b"data",
                 created_at=now,
                 expires_at=now - timedelta(hours=1),
             )
 
     def test_is_expired_true(self):
         entry = CacheEntry(
-            key="k1", value=b"data",
+            key="k1",
+            value=b"data",
             created_at=datetime.now() - timedelta(hours=2),
             expires_at=datetime.now() - timedelta(hours=1),
         )
@@ -627,7 +618,8 @@ class TestDomainCacheEntry:
 
     def test_is_expired_false_no_expiry(self):
         entry = CacheEntry(
-            key="k1", value=b"data",
+            key="k1",
+            value=b"data",
             created_at=datetime.now(),
         )
         assert entry.is_expired() is False
@@ -640,7 +632,8 @@ class TestDomainCacheEntry:
 
     def test_refresh_ttl(self):
         entry = CacheEntry(
-            key="k1", value=b"data",
+            key="k1",
+            value=b"data",
             created_at=datetime.now(),
             ttl_seconds=3600,
             expires_at=datetime.now() + timedelta(seconds=100),
@@ -660,7 +653,6 @@ class TestDomainCacheEntry:
 
 
 class TestCacheMetadata:
-
     def test_touch_returns_new_instance(self):
         meta = CacheMetadata(created_at=datetime.now(), accessed_count=0)
         touched = meta.touch()
@@ -680,32 +672,36 @@ class TestCacheMetadata:
 
 
 class TestTokenUsageMetrics:
-
     def test_negative_prompt_tokens_raises(self):
         with pytest.raises(ValueError, match="cannot be negative"):
             TokenUsageMetrics(
-                prompt_tokens=-1, completion_tokens=10,
-                total_tokens=9, estimated_cost=0.01,
+                prompt_tokens=-1,
+                completion_tokens=10,
+                total_tokens=9,
+                estimated_cost=0.01,
             )
 
     def test_negative_completion_tokens_raises(self):
         with pytest.raises(ValueError, match="cannot be negative"):
             TokenUsageMetrics(
-                prompt_tokens=10, completion_tokens=-5,
-                total_tokens=5, estimated_cost=0.01,
+                prompt_tokens=10,
+                completion_tokens=-5,
+                total_tokens=5,
+                estimated_cost=0.01,
             )
 
     def test_valid_metrics(self):
         m = TokenUsageMetrics(
-            prompt_tokens=100, completion_tokens=50,
-            total_tokens=150, estimated_cost=0.005,
+            prompt_tokens=100,
+            completion_tokens=50,
+            total_tokens=150,
+            estimated_cost=0.005,
         )
         assert m.prompt_tokens == 100
         assert m.total_tokens == 150
 
 
 class TestSemanticMatch:
-
     def test_score_out_of_range_raises(self):
         with pytest.raises(ValueError, match="Similarity score must be between"):
             SemanticMatch(similarity_score=1.5, matched_entry_key="k", confidence=0.8)
@@ -725,46 +721,59 @@ class TestSemanticMatch:
 
 
 class TestCacheMetricsROI:
-
     def test_calculate_roi_no_operations(self):
         m = CacheMetrics(
-            total_hits=0, total_misses=0, total_evictions=0,
-            average_response_time_ms=0, total_tokens_saved=0,
-            total_cost_saved=0, hit_rate=0, memory_usage_bytes=0,
-            semantic_matches=0, false_positives=0,
+            total_hits=0,
+            total_misses=0,
+            total_evictions=0,
+            average_response_time_ms=0,
+            total_tokens_saved=0,
+            total_cost_saved=0,
+            hit_rate=0,
+            memory_usage_bytes=0,
+            semantic_matches=0,
+            false_positives=0,
         )
         assert m.calculate_roi() == 0.0
 
     def test_calculate_roi_with_data(self):
         m = CacheMetrics(
-            total_hits=80, total_misses=20, total_evictions=0,
-            average_response_time_ms=5, total_tokens_saved=1000,
-            total_cost_saved=10.0, hit_rate=0.8, memory_usage_bytes=1024,
-            semantic_matches=50, false_positives=2,
+            total_hits=80,
+            total_misses=20,
+            total_evictions=0,
+            average_response_time_ms=5,
+            total_tokens_saved=1000,
+            total_cost_saved=10.0,
+            hit_rate=0.8,
+            memory_usage_bytes=1024,
+            semantic_matches=50,
+            false_positives=2,
         )
         roi = m.calculate_roi()
         assert roi == pytest.approx(10.0 / 100)
 
 
 class TestCachePolicy:
-
     def test_valid_policy(self):
         p = CachePolicy(
-            max_size_bytes=1024, default_ttl_seconds=3600,
+            max_size_bytes=1024,
+            default_ttl_seconds=3600,
             eviction_policy=EvictionPolicy.LRU,
         )
         assert p.validate() is True
 
     def test_invalid_zero_size(self):
         p = CachePolicy(
-            max_size_bytes=0, default_ttl_seconds=3600,
+            max_size_bytes=0,
+            default_ttl_seconds=3600,
             eviction_policy=EvictionPolicy.LRU,
         )
         assert p.validate() is False
 
     def test_invalid_threshold(self):
         p = CachePolicy(
-            max_size_bytes=1024, default_ttl_seconds=3600,
+            max_size_bytes=1024,
+            default_ttl_seconds=3600,
             eviction_policy=EvictionPolicy.LRU,
             semantic_match_threshold=0.0,
         )
@@ -772,18 +781,21 @@ class TestCachePolicy:
 
 
 class TestCacheInvalidationEvent:
-
     def test_empty_key_raises(self):
         with pytest.raises(ValueError, match="Cache key required"):
             CacheInvalidationEvent(
-                cache_key="", reason="test", triggered_by="user",
-                timestamp=datetime.now(), strategy=InvalidationStrategy.IMMEDIATE,
+                cache_key="",
+                reason="test",
+                triggered_by="user",
+                timestamp=datetime.now(),
+                strategy=InvalidationStrategy.IMMEDIATE,
             )
 
 
 # ############################################################
 # 5. DOMAIN SERVICES TESTS (async)
 # ############################################################
+
 
 def _make_entry(key, value, created_at=None, last_accessed=None, accessed_count=0):
     """Helper to create a domain CacheEntry with metadata."""
@@ -796,13 +808,14 @@ def _make_entry(key, value, created_at=None, last_accessed=None, accessed_count=
         last_accessed_at=last_accessed,
     )
     return CacheEntry(
-        key=key, value=value.encode() if isinstance(value, str) else value,
-        created_at=created_at, metadata=meta,
+        key=key,
+        value=value.encode() if isinstance(value, str) else value,
+        created_at=created_at,
+        metadata=meta,
     )
 
 
 class TestCacheEvictionServiceLRU:
-
     def test_lru_evicts_least_recently_accessed(self):
         old_time = datetime.now() - timedelta(hours=3)
         mid_time = datetime.now() - timedelta(hours=2)
@@ -818,7 +831,8 @@ class TestCacheEvictionServiceLRU:
         storage.delete = AsyncMock(return_value=True)
 
         policy = CachePolicy(
-            max_size_bytes=10, default_ttl_seconds=None,
+            max_size_bytes=10,
+            default_ttl_seconds=None,
             eviction_policy=EvictionPolicy.LRU,
         )
         service = CacheEvictionService(policy=policy, storage=storage)
@@ -829,7 +843,6 @@ class TestCacheEvictionServiceLRU:
 
 
 class TestCacheEvictionServiceLFU:
-
     def test_lfu_evicts_least_frequently_accessed(self):
         now = datetime.now()
 
@@ -843,7 +856,8 @@ class TestCacheEvictionServiceLFU:
         storage.delete = AsyncMock(return_value=True)
 
         policy = CachePolicy(
-            max_size_bytes=10, default_ttl_seconds=None,
+            max_size_bytes=10,
+            default_ttl_seconds=None,
             eviction_policy=EvictionPolicy.LFU,
         )
         service = CacheEvictionService(policy=policy, storage=storage)
@@ -854,7 +868,6 @@ class TestCacheEvictionServiceLFU:
 
 
 class TestCacheEvictionServiceFIFO:
-
     def test_fifo_evicts_oldest_created(self):
         oldest = datetime.now() - timedelta(hours=3)
         middle = datetime.now() - timedelta(hours=2)
@@ -870,7 +883,8 @@ class TestCacheEvictionServiceFIFO:
         storage.delete = AsyncMock(return_value=True)
 
         policy = CachePolicy(
-            max_size_bytes=10, default_ttl_seconds=None,
+            max_size_bytes=10,
+            default_ttl_seconds=None,
             eviction_policy=EvictionPolicy.FIFO,
         )
         service = CacheEvictionService(policy=policy, storage=storage)
@@ -881,11 +895,11 @@ class TestCacheEvictionServiceFIFO:
 
 
 class TestCacheEvictionServiceNoEviction:
-
     def test_no_eviction_when_size_ok(self):
         storage = AsyncMock(spec=StoragePort)
         policy = CachePolicy(
-            max_size_bytes=100, default_ttl_seconds=None,
+            max_size_bytes=100,
+            default_ttl_seconds=None,
             eviction_policy=EvictionPolicy.LRU,
         )
         service = CacheEvictionService(policy=policy, storage=storage)
@@ -894,7 +908,6 @@ class TestCacheEvictionServiceNoEviction:
 
 
 class TestCacheTTLService:
-
     def test_get_expiration_time_none(self):
         result = CacheTTLService.get_expiration_time(None)
         assert result is None
@@ -911,7 +924,8 @@ class TestCacheTTLService:
     def test_should_refresh_ttl_still_fresh(self):
         now = datetime.now()
         entry = CacheEntry(
-            key="k1", value=b"data",
+            key="k1",
+            value=b"data",
             created_at=now,
             ttl_seconds=3600,
             expires_at=now + timedelta(seconds=3600),
@@ -923,8 +937,8 @@ class TestCacheTTLService:
 # 6. DOMAIN PORTS TESTS
 # ############################################################
 
-class TestPortsAreAbstract:
 
+class TestPortsAreAbstract:
     def test_storage_port_not_instantiable(self):
         with pytest.raises(TypeError):
             StoragePort()
@@ -966,8 +980,8 @@ class TestPortsAreAbstract:
 # 7. CACHE FACTORY TESTS
 # ############################################################
 
-class TestCacheFactory:
 
+class TestCacheFactory:
     def test_get_cache_returns_core_cache(self):
         CacheFactory.reset()
         tmpdir = tempfile.mkdtemp()
@@ -999,7 +1013,7 @@ class TestCacheFactory:
         try:
             with patch("aicache.cache_factory.get_config") as mock_config:
                 mock_config.return_value = {"cache_dir": tmpdir}
-                c1 = CacheFactory.get_cache()
+                CacheFactory.get_cache()
                 CacheFactory.reset()
                 assert CacheFactory._instance is None
         finally:
@@ -1011,7 +1025,9 @@ class TestCacheFactory:
         try:
             with patch("aicache.cache_factory.get_config") as mock_config:
                 mock_config.return_value = {
-                    "cache_dir": tmpdir, "ttl": 0, "max_size_mb": 1000,
+                    "cache_dir": tmpdir,
+                    "ttl": 0,
+                    "max_size_mb": 1000,
                     "security.encrypt_sensitive": True,
                 }
                 cache = create_cache(cache_dir=tmpdir, ttl=300)
@@ -1030,153 +1046,4 @@ class TestCacheFactory:
                 assert isinstance(cache, CoreCache)
         finally:
             CacheFactory.reset()
-            shutil.rmtree(tmpdir)
-
-
-# ############################################################
-# 8. MCP SERVER TESTS
-# ############################################################
-
-class TestMCPToolHandler:
-
-    def _make_connection(self):
-        """Create an MCPConnection with temp cache dir."""
-        tmpdir = tempfile.mkdtemp()
-        with patch("aicache.mcp_server.get_config") as mock_config:
-            mock_config.return_value = {"cache_dir": tmpdir}
-            conn = MCPConnection.__new__(MCPConnection)
-            conn.cache = CoreCache(cache_dir=tmpdir)
-            conn.config = {"cache_dir": tmpdir}
-        return conn, tmpdir
-
-    def test_handle_tool_call_get(self):
-        conn, tmpdir = self._make_connection()
-        try:
-            conn.cache.set("hello", "world")
-            result = conn.handle_tool_call("aicache_get", {"prompt": "hello"})
-            assert "content" in result
-            content = json.loads(result["content"][0]["text"])
-            assert content["found"] is True
-        finally:
-            shutil.rmtree(tmpdir)
-
-    def test_handle_tool_call_set(self):
-        conn, tmpdir = self._make_connection()
-        try:
-            result = conn.handle_tool_call("aicache_set", {
-                "prompt": "test", "response": "answer"
-            })
-            assert "content" in result
-            content = json.loads(result["content"][0]["text"])
-            assert content["success"] is True
-        finally:
-            shutil.rmtree(tmpdir)
-
-    def test_handle_tool_call_stats(self):
-        conn, tmpdir = self._make_connection()
-        try:
-            result = conn.handle_tool_call("aicache_stats", {})
-            assert "content" in result
-            content = json.loads(result["content"][0]["text"])
-            assert "total_entries" in content
-        finally:
-            shutil.rmtree(tmpdir)
-
-    def test_handle_tool_call_unknown_tool(self):
-        conn, tmpdir = self._make_connection()
-        try:
-            result = conn.handle_tool_call("nonexistent_tool", {})
-            assert "error" in result
-            assert "Unknown tool" in result["error"]
-        finally:
-            shutil.rmtree(tmpdir)
-
-    def test_handle_tool_call_filters_unknown_kwargs(self):
-        conn, tmpdir = self._make_connection()
-        try:
-            # aicache_stats takes no arguments; extra kwargs should be filtered out
-            result = conn.handle_tool_call("aicache_stats", {
-                "bogus_arg": "value", "another_unknown": 42
-            })
-            assert "content" in result
-            # Should not have errored
-            assert "error" not in result
-        finally:
-            shutil.rmtree(tmpdir)
-
-    def test_handle_tool_call_clear_requires_confirm(self):
-        conn, tmpdir = self._make_connection()
-        try:
-            result = conn.handle_tool_call("aicache_clear", {"confirm": False})
-            content = json.loads(result["content"][0]["text"])
-            assert content["success"] is False
-        finally:
-            shutil.rmtree(tmpdir)
-
-    def test_handle_tool_call_clear_with_confirm(self):
-        conn, tmpdir = self._make_connection()
-        try:
-            conn.cache.set("p1", "r1")
-            result = conn.handle_tool_call("aicache_clear", {"confirm": True})
-            content = json.loads(result["content"][0]["text"])
-            assert content["success"] is True
-        finally:
-            shutil.rmtree(tmpdir)
-
-    def test_handle_tool_call_delete(self):
-        conn, tmpdir = self._make_connection()
-        try:
-            conn.cache.set("p1", "r1")
-            cache_key = conn.cache._get_cache_key("p1")
-            result = conn.handle_tool_call("aicache_delete", {"cache_key": cache_key})
-            content = json.loads(result["content"][0]["text"])
-            assert content["success"] is True
-        finally:
-            shutil.rmtree(tmpdir)
-
-    def test_handle_tool_call_list_verbose(self):
-        conn, tmpdir = self._make_connection()
-        try:
-            conn.cache.set("p1", "r1")
-            result = conn.handle_tool_call("aicache_list", {"limit": 5, "verbose": True})
-            content = json.loads(result["content"][0]["text"])
-            assert "entries" in content
-            assert "total" in content
-        finally:
-            shutil.rmtree(tmpdir)
-
-    def test_handle_tool_call_list_non_verbose(self):
-        """Non-verbose list returns simplified entries."""
-        conn, tmpdir = self._make_connection()
-        try:
-            conn.cache.set("p1", "r1")
-            result = conn.handle_tool_call("aicache_list", {"limit": 5})
-            content = json.loads(result["content"][0]["text"])
-            assert "entries" in content
-            assert "total" in content
-        finally:
-            shutil.rmtree(tmpdir)
-
-    def test_tools_list_returns_all_tools(self):
-        conn, tmpdir = self._make_connection()
-        try:
-            result = conn.handle_tools_list()
-            tool_names = [t["name"] for t in result["tools"]]
-            assert "aicache_get" in tool_names
-            assert "aicache_set" in tool_names
-            assert "aicache_stats" in tool_names
-            assert "aicache_clear" in tool_names
-            assert "aicache_delete" in tool_names
-            assert "aicache_list" in tool_names
-            assert "aicache_prune" in tool_names
-        finally:
-            shutil.rmtree(tmpdir)
-
-    def test_handle_initialize(self):
-        conn, tmpdir = self._make_connection()
-        try:
-            result = conn.handle_initialize({})
-            assert "protocolVersion" in result
-            assert result["serverInfo"]["name"] == "aicache"
-        finally:
             shutil.rmtree(tmpdir)

@@ -4,21 +4,23 @@ Tests for AI-Native Structured Output Schemas (2026)
 Tests the Pydantic schemas for structured AI output following skill2026.md.
 """
 
-import pytest
 from datetime import datetime
+
+import pytest
+
 from aicache.application.schemas import (
-    CacheTier,
-    CacheHitType,
     CacheAnalysis,
     CacheEntryMetadata,
     CacheHealthReport,
+    CacheHitType,
     CacheQueryRequest,
     CacheQueryResponse,
     CacheStatsReport,
+    CacheTier,
     CacheWarmupPlan,
+    ContextBuilderConfig,
     InvalidationPattern,
     MultiProviderCacheStatus,
-    ContextBuilderConfig,
 )
 
 

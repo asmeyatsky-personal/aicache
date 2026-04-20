@@ -10,31 +10,39 @@ This is the primary CLI for aicache. It provides:
 All commands use the Rich library for beautiful output.
 """
 
-import os
-import sys
 import json
-import time
 import shutil
-import warnings
-from pathlib import Path
-from typing import Optional, Dict, Any, List
+import sys
+import time
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import click
+from rich import box
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.prompt import Prompt, Confirm
-from rich import box
+from rich.prompt import Confirm, Prompt
+from rich.table import Table
 
 try:
     import yaml
 except ImportError:
     yaml = None
 
-from .core.cache import CoreCache, get_cache
-from .config import get_config, get_config_manager
+from .config import get_config_manager
+from .infrastructure import get_container
+
+
+def get_cache():
+    """Return the legacy CoreCache admin handle from the wired container.
+
+    Presentation-layer shim: kept so existing Click command bodies stay
+    untouched while the container becomes the single composition point
+    for storage/use-case wiring (§3.6).
+    """
+    return get_container().admin_cache
+
 
 console = Console()
 
@@ -126,9 +134,7 @@ def init(force):
 
     if detected_tools:
         console.print(f"\n🔍 Detected AI CLI tools: {', '.join(detected_tools)}")
-        console.print(
-            "💡 Run 'aicache install --setup-wrappers' to enable automatic caching"
-        )
+        console.print("💡 Run 'aicache install --setup-wrappers' to enable automatic caching")
     else:
         console.print("⚠️  No common AI CLI tools detected.")
 
@@ -362,7 +368,7 @@ def inspect(cache_key):
         return
 
     try:
-        with open(cache_file, "r") as f:
+        with open(cache_file) as f:
             data = json.load(f)
 
         console.print(
@@ -568,9 +574,7 @@ def toon_list(limit, verbose):
         repo = FileSystemTOONRepositoryAdapter()
     except Exception as e:
         console.print(f"[yellow]⚠ TOON data not available: {e}[/yellow]")
-        console.print(
-            "[dim]TOON tracking requires running cache operations first.[/dim]"
-        )
+        console.print("[dim]TOON tracking requires running cache operations first.[/dim]")
         return
 
     import asyncio
@@ -601,9 +605,7 @@ def toon_list(limit, verbose):
         tokens = str(t.token_delta.saved_total)
         cost = f"${t.token_delta.cost_saved:.4f}"
         sim = (
-            f"{t.semantic_data.similarity_score:.2f}"
-            if t.semantic_data.similarity_score
-            else "N/A"
+            f"{t.semantic_data.similarity_score:.2f}" if t.semantic_data.similarity_score else "N/A"
         )
 
         table.add_row(op_id, op_type, tokens, cost, sim)
@@ -731,6 +733,58 @@ def toon_last():
         console.print(f"[yellow]⚠ Error: {e}[/yellow]")
 
 
+@cli.command()
+@click.option("--days", default=30, help="Rolling window (days)")
+@click.option("--json", "as_json", is_flag=True, help="Emit machine-readable JSON")
+def savings(days: int, as_json: bool) -> None:
+    """Rolling SDK-wrapper savings from the telemetry event log (§6)."""
+    import asyncio
+
+    from .infrastructure import summarise
+
+    container = get_container()
+    events = asyncio.run(container.telemetry.read_recent(days=days))
+    report = summarise(events)
+
+    if as_json:
+        console.print_json(data=report)
+        return
+
+    title = f"💰 Savings — last {days} days"
+    console.print(
+        Panel.fit(
+            (
+                f"[bold]Calls:[/bold] {report['total_calls']}  "
+                f"[bold]Hits:[/bold] {report['hits']}  "
+                f"[bold]Misses:[/bold] {report['misses']}  "
+                f"[bold]Hit rate:[/bold] {report['hit_rate']:.1%}\n"
+                f"[bold green]Cost saved:[/bold green] ${report['cost_saved_usd']:.4f}  "
+                f"[bold]Cost spent:[/bold] ${report['cost_spent_usd']:.4f}  "
+                f"[bold]Tokens saved:[/bold] {report['tokens_saved']:,}"
+            ),
+            title=title,
+            border_style="green",
+        )
+    )
+
+    if report["per_model"]:
+        table = Table(title="Per model", show_header=True, header_style="bold blue")
+        table.add_column("Model")
+        table.add_column("Hits", justify="right")
+        table.add_column("Misses", justify="right")
+        table.add_column("Saved (USD)", justify="right")
+        table.add_column("Spent (USD)", justify="right")
+        for model, bucket in sorted(report["per_model"].items()):
+            table.add_row(
+                model,
+                str(bucket["hits"]),
+                str(bucket["misses"]),
+                f"{bucket['cost_saved_usd']:.4f}",
+                f"{bucket['cost_spent_usd']:.4f}",
+            )
+        console.print(table)
+
+
 @cli.group()
 def mcp():
     """MCP (Model Context Protocol) integration"""
@@ -738,36 +792,31 @@ def mcp():
 
 
 @mcp.command("start")
-@click.option(
-    "--mode", type=click.Choice(["stdio", "tcp"]), default="stdio", help="Server mode"
-)
+@click.option("--mode", type=click.Choice(["stdio", "tcp"]), default="stdio", help="Server mode")
 @click.option("--port", type=int, default=8765, help="TCP port")
 def mcp_start(mode, port):
     """Start the MCP server"""
-    from .mcp_server import AICacheMCPServer
+    from .infrastructure.mcp_server import MCPCacheServer, run_stdio
 
     console.print(f"🚀 [bold]Starting AI Cache MCP Server ({mode} mode)[/bold]")
 
     if mode == "stdio":
         console.print("[dim]Running in stdio mode...[/dim]")
         console.print(
-            "[dim]This server can be connected to Claude Desktop or other MCP clients.[/dim]"
+            "[dim]Connect via Claude Desktop, Claude Code, or any MCP-capable agent.[/dim]"
         )
-        server = AICacheMCPServer(port=port)
         try:
-            server.run_stdio()
+            run_stdio(MCPCacheServer())
         except KeyboardInterrupt:
             console.print("\n👋 Server stopped.")
     else:
-        console.print(f"[dim]Running on port {port}...[/dim]")
-        server = AICacheMCPServer(port=port)
-        server.run_tcp()
+        console.print(f"[yellow]TCP mode (port {port}) is not supported yet — use stdio[/yellow]")
 
 
 @mcp.command("config")
 def mcp_config():
     """Show MCP configuration for Claude Desktop"""
-    config_path = Path.home() / ".config" / "aicache"
+    Path.home() / ".config" / "aicache"
 
     console.print(
         Panel.fit(
@@ -779,7 +828,7 @@ Add this to your Claude Desktop config:
   "mcpServers": {
     "aicache": {
       "command": "python",
-      "args": ["-m", "aicache.mcp_server"],
+      "args": ["-m", "aicache.infrastructure.mcp_server"],
       "env": {}
     }
   }
@@ -813,9 +862,7 @@ def config_get(key):
 
     if isinstance(value, dict):
         console.print(
-            yaml.dump(value, default_flow_style=False)
-            if yaml
-            else json.dumps(value, indent=2)
+            yaml.dump(value, default_flow_style=False) if yaml else json.dumps(value, indent=2)
         )
     else:
         console.print(str(value))
@@ -839,7 +886,7 @@ def config_set(key, value):
     if success:
         console.print(f"✅ [green]Set {key} = {parsed_value}[/green]")
     else:
-        console.print(f"❌ [red]Failed to set configuration[/red]")
+        console.print("❌ [red]Failed to set configuration[/red]")
 
 
 @config.command("validate")
@@ -914,7 +961,9 @@ def provider_set(name):
     if service.set_provider(name):
         config = service.get_provider_config()
         console.print(f"Active provider: [bold]{name}[/bold]")
-        console.print(f"  Auto cache: {'Yes' if config.auto_cache_enabled else 'No (manual prefix required)'}")
+        console.print(
+            f"  Auto cache: {'Yes' if config.auto_cache_enabled else 'No (manual prefix required)'}"
+        )
         console.print(f"  Min tokens: {config.cache_min_tokens}")
         console.print(f"  Cache TTL: {config.cache_ttl_seconds // 60} minutes")
     else:
@@ -926,7 +975,6 @@ def provider_set(name):
 def provider_info(name):
     """Show detailed provider caching information"""
     from .application.prompt_cache_service import PromptCacheService
-    from .domain.prompt_caching import CacheProvider
 
     service = PromptCacheService()
 
@@ -958,12 +1006,12 @@ def provider_info(name):
         Panel.fit(
             f"""[bold]{provider_name.upper()} Prompt Caching[/bold]
 
-{details.get(provider_name, 'No details available.')}
+{details.get(provider_name, "No details available.")}
 
 [bold]Configuration:[/bold]
   Min tokens for caching: {config.cache_min_tokens}
   Cache TTL: {config.cache_ttl_seconds // 60} minutes
-  Auto cache: {'Enabled' if config.auto_cache_enabled else 'Disabled (manual)'}""",
+  Auto cache: {"Enabled" if config.auto_cache_enabled else "Disabled (manual)"}""",
             title=f"Provider: {provider_name}",
             border_style="blue",
         )
@@ -990,19 +1038,19 @@ def report(days, json_out):
             f"""[bold]Cost Savings Report - Last {days} Days[/bold]
 
 [bold]Overall Performance[/bold]
-  Total Queries:      {report_data['total_queries']:,}
-  Cache Hits:         {report_data['total_hits']:,}
-  Hit Rate:           {report_data['hit_rate_percent']:.1f}%
-  Tokens Saved:       {report_data['total_tokens_saved']:,}
+  Total Queries:      {report_data["total_queries"]:,}
+  Cache Hits:         {report_data["total_hits"]:,}
+  Hit Rate:           {report_data["hit_rate_percent"]:.1f}%
+  Tokens Saved:       {report_data["total_tokens_saved"]:,}
 
 [bold green]Estimated Savings[/bold green]
-  This Period:        ${report_data['total_estimated_savings']:.4f}
-  Monthly Projection: ${report_data['monthly_projection']:.2f}
+  This Period:        ${report_data["total_estimated_savings"]:.4f}
+  Monthly Projection: ${report_data["monthly_projection"]:.2f}
 
 [bold]All-Time[/bold]
-  Total Queries:      {report_data['all_time']['queries']:,}
-  Total Hits:         {report_data['all_time']['hits']:,}
-  Total Tokens Saved: {report_data['all_time']['tokens_saved']:,}""",
+  Total Queries:      {report_data["all_time"]["queries"]:,}
+  Total Hits:         {report_data["all_time"]["hits"]:,}
+  Total Tokens Saved: {report_data["all_time"]["tokens_saved"]:,}""",
             title="Cost Savings Report",
             border_style="green",
         )
@@ -1011,8 +1059,7 @@ def report(days, json_out):
     # Per-provider breakdown
     if report_data["by_provider"]:
         table = Table(
-            show_header=True, header_style="bold blue", box=box.ROUNDED,
-            title="By Provider"
+            show_header=True, header_style="bold blue", box=box.ROUNDED, title="By Provider"
         )
         table.add_column("Provider", width=12)
         table.add_column("Queries", justify="right", width=10)

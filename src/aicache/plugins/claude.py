@@ -1,5 +1,7 @@
 import shutil
+
 from .base import CLIWrapper
+
 
 class ClaudeCLIWrapper(CLIWrapper):
     def get_cli_name(self) -> str:
@@ -30,7 +32,7 @@ class ClaudeCLIWrapper(CLIWrapper):
             except ValueError:
                 pass
 
-        context = {'model': model}
+        context = {"model": model}
         return prompt_content, context
 
     def execute_cli(self, args: list) -> tuple[str, int, str]:

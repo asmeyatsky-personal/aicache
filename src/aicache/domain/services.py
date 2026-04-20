@@ -6,16 +6,24 @@ without depending on infrastructure details.
 """
 
 import logging
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+
 from .models import (
-    CacheEntry, CacheMetadata, CachePolicy, EvictionPolicy,
-    CacheInvalidationEvent, InvalidationStrategy, SemanticMatch,
-    CacheResult, TokenUsageMetrics
+    CacheEntry,
+    CacheInvalidationEvent,
+    CachePolicy,
+    EvictionPolicy,
+    InvalidationStrategy,
+    SemanticMatch,
+    TokenUsageMetrics,
 )
 from .ports import (
-    StoragePort, SemanticIndexPort, TokenCounterPort, QueryNormalizerPort,
-    EmbeddingGeneratorPort, EventPublisherPort
+    EmbeddingGeneratorPort,
+    EventPublisherPort,
+    QueryNormalizerPort,
+    SemanticIndexPort,
+    StoragePort,
+    TokenCounterPort,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,8 +35,9 @@ class QueryNormalizationService:
     def __init__(self, normalizer: QueryNormalizerPort):
         self.normalizer = normalizer
 
-    def should_use_cached_response(self, query: str, cached_entry: CacheEntry,
-                                  similarity_threshold: float = 0.85) -> bool:
+    def should_use_cached_response(
+        self, query: str, cached_entry: CacheEntry, similarity_threshold: float = 0.85
+    ) -> bool:
         """Determine if cached entry applies to new query."""
         if cached_entry.metadata is None or cached_entry.metadata.normalized_query is None:
             return False
@@ -46,10 +55,7 @@ class QueryNormalizationService:
                 return True
 
         # Similarity matching
-        similarity = self.normalizer.similarity_score(
-            query,
-            cached_entry.metadata.normalized_query
-        )
+        similarity = self.normalizer.similarity_score(query, cached_entry.metadata.normalized_query)
         return similarity >= similarity_threshold
 
 
@@ -65,21 +71,16 @@ class TokenCountingService:
         completion_tokens = self.counter.count_completion_tokens(completion, model)
         total_tokens = prompt_tokens + completion_tokens
 
-        cost = self.counter.estimate_cost(
-            model,
-            prompt_tokens,
-            completion_tokens
-        )
+        cost = self.counter.estimate_cost(model, prompt_tokens, completion_tokens)
 
         return TokenUsageMetrics(
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
-            estimated_cost=cost
+            estimated_cost=cost,
         )
 
-    def calculate_savings(self, cache_hit: bool, tokens_without_cache: int,
-                         model: str) -> float:
+    def calculate_savings(self, cache_hit: bool, tokens_without_cache: int, model: str) -> float:
         """Calculate cost savings from cache hit."""
         if not cache_hit:
             return 0.0
@@ -89,13 +90,15 @@ class TokenCountingService:
 class SemanticCachingService:
     """Manages semantic similarity matching and caching."""
 
-    def __init__(self, semantic_index: SemanticIndexPort,
-                 embedding_generator: EmbeddingGeneratorPort):
+    def __init__(
+        self, semantic_index: SemanticIndexPort, embedding_generator: EmbeddingGeneratorPort
+    ):
         self.semantic_index = semantic_index
         self.embedding_generator = embedding_generator
 
-    async def find_applicable_cache(self, query: str,
-                                   min_similarity: float = 0.85) -> Optional[SemanticMatch]:
+    async def find_applicable_cache(
+        self, query: str, min_similarity: float = 0.85
+    ) -> SemanticMatch | None:
         """Find cache entry with semantic similarity."""
         embeddings = await self.embedding_generator.generate_embedding(query)
         matches = await self.semantic_index.find_similar(embeddings, min_similarity)
@@ -132,7 +135,7 @@ class CacheEvictionService:
         self.policy = policy
         self.storage = storage
 
-    async def evict_if_necessary(self, current_size: int, new_entry_size: int) -> List[str]:
+    async def evict_if_necessary(self, current_size: int, new_entry_size: int) -> list[str]:
         """Evict entries if cache size exceeded."""
         if current_size + new_entry_size <= self.policy.max_size_bytes:
             return []
@@ -149,7 +152,7 @@ class CacheEvictionService:
 
         return evicted_keys
 
-    async def _evict_lru(self, space_needed: int) -> List[str]:
+    async def _evict_lru(self, space_needed: int) -> list[str]:
         """Evict least recently used entries."""
         keys = await self.storage.get_all_keys()
         entries = []
@@ -159,9 +162,13 @@ class CacheEvictionService:
                 entries.append((key, entry))
 
         # Sort by last_accessed (oldest first)
-        entries.sort(key=lambda x: (
-            x[1].metadata.last_accessed_at if x[1].metadata and x[1].metadata.last_accessed_at else x[1].created_at
-        ))
+        entries.sort(
+            key=lambda x: (
+                x[1].metadata.last_accessed_at
+                if x[1].metadata and x[1].metadata.last_accessed_at
+                else x[1].created_at
+            )
+        )
 
         evicted = []
         freed_space = 0
@@ -174,7 +181,7 @@ class CacheEvictionService:
 
         return evicted
 
-    async def _evict_lfu(self, space_needed: int) -> List[str]:
+    async def _evict_lfu(self, space_needed: int) -> list[str]:
         """Evict least frequently used entries."""
         keys = await self.storage.get_all_keys()
         entries = []
@@ -197,7 +204,7 @@ class CacheEvictionService:
 
         return evicted
 
-    async def _evict_fifo(self, space_needed: int) -> List[str]:
+    async def _evict_fifo(self, space_needed: int) -> list[str]:
         """Evict first-in-first-out entries."""
         keys = await self.storage.get_all_keys()
         entries = []
@@ -224,14 +231,19 @@ class CacheEvictionService:
 class CacheInvalidationService:
     """Manages cache invalidation with traceability."""
 
-    def __init__(self, storage: StoragePort, semantic_index: SemanticIndexPort,
-                 event_publisher: EventPublisherPort):
+    def __init__(
+        self,
+        storage: StoragePort,
+        semantic_index: SemanticIndexPort,
+        event_publisher: EventPublisherPort,
+    ):
         self.storage = storage
         self.semantic_index = semantic_index
         self.event_publisher = event_publisher
 
-    async def invalidate_key(self, cache_key: str, reason: str = "explicit",
-                           triggered_by: str = "user") -> None:
+    async def invalidate_key(
+        self, cache_key: str, reason: str = "explicit", triggered_by: str = "user"
+    ) -> None:
         """Invalidate specific cache entry."""
         success = await self.storage.delete(cache_key)
 
@@ -243,13 +255,13 @@ class CacheInvalidationService:
                 triggered_by=triggered_by,
                 timestamp=datetime.now(),
                 strategy=InvalidationStrategy.IMMEDIATE,
-                affected_entries=1
+                affected_entries=1,
             )
             await self.event_publisher.publish(event)
 
-    async def invalidate_semantic_neighbors(self, query: str,
-                                           threshold: float = 0.75,
-                                           reason: str = "semantic_invalidation") -> int:
+    async def invalidate_semantic_neighbors(
+        self, query: str, threshold: float = 0.75, reason: str = "semantic_invalidation"
+    ) -> int:
         """Invalidate semantically similar cache entries."""
         # This would require the semantic index to support reverse lookup
         # Implementation depends on index capabilities
@@ -274,7 +286,7 @@ class CacheInvalidationService:
                 triggered_by="system",
                 timestamp=datetime.now(),
                 strategy=InvalidationStrategy.IMMEDIATE,
-                affected_entries=invalidated
+                affected_entries=invalidated,
             )
             await self.event_publisher.publish(event)
 
@@ -299,7 +311,7 @@ class CacheInvalidationService:
                 triggered_by="system",
                 timestamp=datetime.now(),
                 strategy=InvalidationStrategy.IMMEDIATE,
-                affected_entries=purged
+                affected_entries=purged,
             )
             await self.event_publisher.publish(event)
 
@@ -310,11 +322,12 @@ class CacheTTLService:
     """Manages TTL (time-to-live) enforcement."""
 
     @staticmethod
-    def get_expiration_time(ttl_seconds: Optional[int]) -> Optional[datetime]:
+    def get_expiration_time(ttl_seconds: int | None) -> datetime | None:
         """Calculate expiration time from TTL."""
         if ttl_seconds is None:
             return None
         from datetime import timedelta
+
         return datetime.now() + timedelta(seconds=ttl_seconds)
 
     @staticmethod

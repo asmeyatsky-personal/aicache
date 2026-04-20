@@ -5,27 +5,33 @@ These are enhanced versions of the core use cases that integrate TOON generation
 for comprehensive token optimization tracking and analytics.
 """
 
+import hashlib
 import logging
 import time
 import uuid
-import hashlib
-from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
+from typing import Any
 
-from ..domain.models import (
-    CacheEntry, CacheMetadata, CachePolicy, CacheResult,
-    TokenUsageMetrics
-)
+from ..domain.models import CacheEntry, CacheMetadata, CachePolicy, CacheResult
 from ..domain.ports import (
-    StoragePort, SemanticIndexPort, TokenCounterPort, QueryNormalizerPort,
-    EmbeddingGeneratorPort, EventPublisherPort, CacheMetricsPort
+    CacheMetricsPort,
+    EmbeddingGeneratorPort,
+    EventPublisherPort,
+    QueryNormalizerPort,
+    SemanticIndexPort,
+    StoragePort,
+    TokenCounterPort,
+    TOONRepositoryPort,
 )
 from ..domain.services import (
-    QueryNormalizationService, TokenCountingService, SemanticCachingService,
-    CacheEvictionService, CacheInvalidationService, CacheTTLService
+    CacheEvictionService,
+    CacheInvalidationService,
+    CacheTTLService,
+    QueryNormalizationService,
+    SemanticCachingService,
+    TokenCountingService,
 )
-from ..domain.toon_service import TOONGenerationService, TOONAnalyticsService
-from ..domain.ports import TOONRepositoryPort
+from ..domain.toon_service import TOONAnalyticsService, TOONGenerationService
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +57,7 @@ class TOONQueryCacheUseCase:
         embedding_generator: EmbeddingGeneratorPort,
         metrics: CacheMetricsPort,
         cache_policy: CachePolicy,
-        toon_repository: TOONRepositoryPort
+        toon_repository: TOONRepositoryPort,
     ):
         self.storage = storage
         self.semantic_caching = SemanticCachingService(semantic_index, embedding_generator)
@@ -66,9 +72,9 @@ class TOONQueryCacheUseCase:
     async def execute(
         self,
         query: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
         model: str = "claude-3-opus",
-        expected_prompt_tokens: int = 0
+        expected_prompt_tokens: int = 0,
     ) -> CacheResult:
         """
         Execute cache query with TOON generation.
@@ -119,19 +125,25 @@ class TOONQueryCacheUseCase:
                     exact_result.entry_key or "",
                     response_time_ms,
                     tokens_saved=toon.token_delta.saved_total,
-                    cost_saved=toon.token_delta.cost_saved
+                    cost_saved=toon.token_delta.cost_saved,
                 )
 
                 logger.debug(
                     f"Cache hit (exact): {expected_prompt_tokens} tokens saved, "
                     f"${toon.token_delta.cost_saved:.6f} cost saved"
                 )
-                return CacheResult.create_hit(exact_result.value, exact_result.entry_key, response_time_ms)
+                return CacheResult.create_hit(
+                    exact_result.value, exact_result.entry_key, response_time_ms
+                )
 
             # Step 2: Try semantic match if enabled
             if self.policy.enable_semantic_caching:
                 semantic_result = await self._try_semantic_match(query)
-                if semantic_result.hit and semantic_result.confidence and semantic_result.confidence > 0.85:
+                if (
+                    semantic_result.hit
+                    and semantic_result.confidence
+                    and semantic_result.confidence > 0.85
+                ):
                     response_time_ms = (time.time() - start_time) * 1000
                     cache_entry = await self.storage.get(semantic_result.entry_key or query_hash)
 
@@ -158,7 +170,7 @@ class TOONQueryCacheUseCase:
                         semantic_result.entry_key or "",
                         response_time_ms,
                         tokens_saved=toon.token_delta.saved_total,
-                        cost_saved=toon.token_delta.cost_saved
+                        cost_saved=toon.token_delta.cost_saved,
                     )
 
                     logger.debug(
@@ -197,7 +209,7 @@ class TOONQueryCacheUseCase:
             logger.error(f"Error querying cache: {e}", exc_info=True)
             return CacheResult.create_miss((time.time() - start_time) * 1000)
 
-    async def _try_exact_match(self, query: str, context: Optional[Dict[str, Any]]) -> CacheResult:
+    async def _try_exact_match(self, query: str, context: dict[str, Any] | None) -> CacheResult:
         """Try to find exact cache match."""
         normalized_query = self.query_normalization.normalizer.normalize(query)
         cache_key = self._generate_cache_key(normalized_query, context)
@@ -220,8 +232,7 @@ class TOONQueryCacheUseCase:
     async def _try_semantic_match(self, query: str) -> CacheResult:
         """Try to find semantic match."""
         semantic_match = await self.semantic_caching.find_applicable_cache(
-            query,
-            self.policy.semantic_match_threshold
+            query, self.policy.semantic_match_threshold
         )
 
         if not semantic_match:
@@ -240,20 +251,20 @@ class TOONQueryCacheUseCase:
             entry.value,
             semantic_match.matched_entry_key,
             semantic_match.similarity_score,
-            semantic_match.confidence
+            semantic_match.confidence,
         )
 
     @staticmethod
-    def _generate_cache_key(query: str, context: Optional[Dict[str, Any]]) -> str:
+    def _generate_cache_key(query: str, context: dict[str, Any] | None) -> str:
         """Generate deterministic cache key."""
         import json
 
         hasher = hashlib.sha256()
-        hasher.update(query.encode('utf-8'))
+        hasher.update(query.encode("utf-8"))
 
         if context:
             sorted_context = json.dumps(context, sort_keys=True)
-            hasher.update(sorted_context.encode('utf-8'))
+            hasher.update(sorted_context.encode("utf-8"))
 
         return hasher.hexdigest()
 
@@ -277,7 +288,7 @@ class TOONStoreCacheUseCase:
         embedding_generator: EmbeddingGeneratorPort,
         metrics: CacheMetricsPort,
         cache_policy: CachePolicy,
-        toon_repository: TOONRepositoryPort
+        toon_repository: TOONRepositoryPort,
     ):
         self.storage = storage
         self.semantic_caching = SemanticCachingService(semantic_index, embedding_generator)
@@ -290,10 +301,10 @@ class TOONStoreCacheUseCase:
         self,
         key: str,
         value: bytes,
-        ttl_seconds: Optional[int] = None,
-        context: Optional[Dict[str, Any]] = None,
-        query: Optional[str] = None,
-        model: str = "claude-3-opus"
+        ttl_seconds: int | None = None,
+        context: dict[str, Any] | None = None,
+        query: str | None = None,
+        model: str = "claude-3-opus",
     ) -> None:
         """
         Store cache entry with TOON tracking.
@@ -327,7 +338,7 @@ class TOONStoreCacheUseCase:
                 created_at=now,
                 accessed_count=0,
                 normalized_query=key,
-                metadata={"context": context} if context else {}
+                metadata={"context": context} if context else {},
             )
 
             entry = CacheEntry(
@@ -337,7 +348,7 @@ class TOONStoreCacheUseCase:
                 expires_at=expires_at,
                 ttl_seconds=ttl_seconds,
                 metadata=metadata,
-                context=context
+                context=context,
             )
 
             # Store entry
@@ -364,7 +375,7 @@ class TOONStoreCacheUseCase:
                     response_size_bytes=entry_size,
                     ttl_seconds=ttl_seconds,
                     duration_ms=response_time_ms,
-                    context=context
+                    context=context,
                 )
 
                 await self.toon_repository.save_toon(toon)
@@ -386,15 +397,21 @@ class TOONStoreCacheUseCase:
         normalized_query: str,
         model: str,
         response_size_bytes: int,
-        ttl_seconds: Optional[int],
+        ttl_seconds: int | None,
         duration_ms: float,
-        context: Optional[Dict[str, Any]]
+        context: dict[str, Any] | None,
     ):
         """Create a TOON object for a store operation."""
         from ..domain.toon import (
-            TOONCacheOperation, TOONQueryMetadata, TOONTokenDelta,
-            TOONSemanticMatchData, TOONCacheMetadata, TOONOptimizationInsight,
-            TOONOperationType, TOONStrategy, TOONOptimizationLevel
+            TOONCacheMetadata,
+            TOONCacheOperation,
+            TOONOperationType,
+            TOONOptimizationInsight,
+            TOONOptimizationLevel,
+            TOONQueryMetadata,
+            TOONSemanticMatchData,
+            TOONStrategy,
+            TOONTokenDelta,
         )
 
         query_hash = hashlib.sha256(normalized_query.encode()).hexdigest()
@@ -479,12 +496,10 @@ class TOONInvalidateCacheUseCase:
         storage: StoragePort,
         semantic_index: SemanticIndexPort,
         event_publisher: EventPublisherPort,
-        metrics: CacheMetricsPort
+        metrics: CacheMetricsPort,
     ):
         self.invalidation_service = CacheInvalidationService(
-            storage,
-            semantic_index,
-            event_publisher
+            storage, semantic_index, event_publisher
         )
         self.metrics = metrics
 
@@ -510,24 +525,16 @@ class TOONInvalidateCacheUseCase:
 class TOONCacheMetricsUseCase:
     """Use case for cache metrics and TOON analytics."""
 
-    def __init__(
-        self,
-        metrics: CacheMetricsPort,
-        toon_repository: TOONRepositoryPort
-    ):
+    def __init__(self, metrics: CacheMetricsPort, toon_repository: TOONRepositoryPort):
         self.metrics = metrics
         self.toon_repository = toon_repository
         self.analytics_service = TOONAnalyticsService()
 
-    async def get_metrics(self) -> Dict[str, Any]:
+    async def get_metrics(self) -> dict[str, Any]:
         """Get cache metrics."""
         return await self.metrics.get_metrics()
 
-    async def get_toon_analytics(
-        self,
-        limit: Optional[int] = None,
-        days: int = 1
-    ) -> Dict[str, Any]:
+    async def get_toon_analytics(self, limit: int | None = None, days: int = 1) -> dict[str, Any]:
         """
         Get TOON analytics for specified period.
 
@@ -538,15 +545,11 @@ class TOONCacheMetricsUseCase:
         Returns:
             Analytics dictionary with insights and metrics
         """
-        from ..infrastructure.toon_adapters import TOONQueryBuilder
-        from ..domain.toon import TOONOperationType
-
-        # Get TOONs from the period
         start_time = datetime.now() - timedelta(days=days)
         end_time = datetime.now()
 
-        builder = TOONQueryBuilder(self.toon_repository)
-        toons = await builder.with_time_range(start_time, end_time).execute()
+        toons = await self.toon_repository.get_all_toons()
+        toons = [t for t in toons if start_time <= t.timestamp <= end_time]
 
         if limit:
             toons = toons[-limit:]

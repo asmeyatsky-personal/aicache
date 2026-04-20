@@ -10,34 +10,33 @@ Tests cover:
 - Query builder
 """
 
-import pytest
 import json
 from datetime import datetime, timedelta
-from typing import List
-import tempfile
-from pathlib import Path
 
+import pytest
+
+# Import domain models for cache
 # Import domain models
 from aicache.domain.toon import (
-    TOONOperationType, TOONOptimizationLevel, TOONStrategy,
-    TOONQueryMetadata, TOONTokenDelta, TOONSemanticMatchData,
-    TOONCacheMetadata, TOONOptimizationInsight, TOONCacheOperation,
-    TOONAnalytics
+    TOONCacheMetadata,
+    TOONCacheOperation,
+    TOONOperationType,
+    TOONOptimizationInsight,
+    TOONOptimizationLevel,
+    TOONQueryMetadata,
+    TOONSemanticMatchData,
+    TOONStrategy,
+    TOONTokenDelta,
 )
 
 # Import services
-from aicache.domain.toon_service import TOONGenerationService, TOONAnalyticsService
+from aicache.domain.toon_service import TOONAnalyticsService
 
 # Import adapters
 from aicache.infrastructure.toon_adapters import (
     InMemoryTOONRepositoryAdapter,
-    FileSystemTOONRepositoryAdapter,
     TOONExportService,
-    TOONQueryBuilder
 )
-
-# Import domain models for cache
-from aicache.domain.models import CacheResult, CacheEntry, CacheMetadata
 
 
 class TestTOONDomainModels:
@@ -91,7 +90,7 @@ class TestTOONDomainModels:
             cost_without_cache=0.000375,
             cost_with_cache=0.0,
             cost_saved=0.000375,
-            model="claude-3-opus"
+            model="claude-3-opus",
         )
 
         assert delta.saved_total == 25
@@ -116,7 +115,7 @@ class TestTOONDomainModels:
                 cost_without_cache=0.0,
                 cost_with_cache=0.0,
                 cost_saved=0.0,
-                model="claude-3-opus"
+                model="claude-3-opus",
             )
 
     def test_toon_semantic_match_data_creation(self):
@@ -129,7 +128,7 @@ class TestTOONDomainModels:
             semantic_distance=0.08,
             embedding_dimension=384,
             similarity_threshold_used=0.85,
-            threshold_met=True
+            threshold_met=True,
         )
 
         assert data.similarity_score == 0.92
@@ -148,7 +147,7 @@ class TestTOONDomainModels:
                 semantic_distance=0.08,
                 embedding_dimension=384,
                 similarity_threshold_used=0.85,
-                threshold_met=True
+                threshold_met=True,
             )
 
     def test_toon_optimization_insight_creation(self):
@@ -161,7 +160,7 @@ class TestTOONDomainModels:
             cache_efficiency_score=0.95,
             predictability_score=0.8,
             pattern_detected=False,
-            similar_queries_found=5
+            similar_queries_found=5,
         )
 
         assert insight.optimization_level == TOONOptimizationLevel.HIGH
@@ -189,7 +188,7 @@ class TestTOONDomainModels:
             cost_without_cache=0.000225,
             cost_with_cache=0.0,
             cost_saved=0.000225,
-            model="claude-3-opus"
+            model="claude-3-opus",
         )
 
         semantic_data = TOONSemanticMatchData(
@@ -200,7 +199,7 @@ class TestTOONDomainModels:
             semantic_distance=None,
             embedding_dimension=None,
             similarity_threshold_used=0.85,
-            threshold_met=False
+            threshold_met=False,
         )
 
         cache_metadata = TOONCacheMetadata(
@@ -211,7 +210,7 @@ class TestTOONDomainModels:
             last_accessed=datetime.now(),
             created_at=datetime.now(),
             memory_size_bytes=1024,
-            eviction_policy="lru"
+            eviction_policy="lru",
         )
 
         insight = TOONOptimizationInsight(
@@ -222,7 +221,7 @@ class TestTOONDomainModels:
             cache_efficiency_score=0.95,
             predictability_score=0.8,
             pattern_detected=False,
-            similar_queries_found=0
+            similar_queries_found=0,
         )
 
         toon = TOONCacheOperation(
@@ -235,7 +234,7 @@ class TestTOONDomainModels:
             token_delta=token_delta,
             semantic_data=semantic_data,
             cache_metadata=cache_metadata,
-            optimization_insight=insight
+            optimization_insight=insight,
         )
 
         assert toon.operation_id == "550e8400-e29b-41d4-a716-446655440000"
@@ -263,7 +262,7 @@ class TestTOONDomainModels:
             cost_without_cache=0.000225,
             cost_with_cache=0.0,
             cost_saved=0.000225,
-            model="claude-3-opus"
+            model="claude-3-opus",
         )
 
         semantic_data = TOONSemanticMatchData(
@@ -274,7 +273,7 @@ class TestTOONDomainModels:
             semantic_distance=None,
             embedding_dimension=None,
             similarity_threshold_used=0.85,
-            threshold_met=False
+            threshold_met=False,
         )
 
         cache_metadata = TOONCacheMetadata(
@@ -285,7 +284,7 @@ class TestTOONDomainModels:
             last_accessed=datetime.now(),
             created_at=datetime.now(),
             memory_size_bytes=1024,
-            eviction_policy="lru"
+            eviction_policy="lru",
         )
 
         insight = TOONOptimizationInsight(
@@ -296,7 +295,7 @@ class TestTOONDomainModels:
             cache_efficiency_score=0.95,
             predictability_score=0.8,
             pattern_detected=False,
-            similar_queries_found=0
+            similar_queries_found=0,
         )
 
         toon = TOONCacheOperation(
@@ -309,7 +308,7 @@ class TestTOONDomainModels:
             token_delta=token_delta,
             semantic_data=semantic_data,
             cache_metadata=cache_metadata,
-            optimization_insight=insight
+            optimization_insight=insight,
         )
 
         toon_dict = toon.to_dict()
@@ -341,7 +340,7 @@ class TestTOONDomainModels:
             cost_without_cache=0.000225,
             cost_with_cache=0.0,
             cost_saved=0.000225,
-            model="claude-3-opus"
+            model="claude-3-opus",
         )
 
         semantic_data = TOONSemanticMatchData(
@@ -352,7 +351,7 @@ class TestTOONDomainModels:
             semantic_distance=None,
             embedding_dimension=None,
             similarity_threshold_used=0.85,
-            threshold_met=False
+            threshold_met=False,
         )
 
         cache_metadata = TOONCacheMetadata(
@@ -363,7 +362,7 @@ class TestTOONDomainModels:
             last_accessed=datetime.now(),
             created_at=datetime.now(),
             memory_size_bytes=1024,
-            eviction_policy="lru"
+            eviction_policy="lru",
         )
 
         insight = TOONOptimizationInsight(
@@ -374,7 +373,7 @@ class TestTOONDomainModels:
             cache_efficiency_score=0.95,
             predictability_score=0.8,
             pattern_detected=False,
-            similar_queries_found=0
+            similar_queries_found=0,
         )
 
         toon = TOONCacheOperation(
@@ -387,7 +386,7 @@ class TestTOONDomainModels:
             token_delta=token_delta,
             semantic_data=semantic_data,
             cache_metadata=cache_metadata,
-            optimization_insight=insight
+            optimization_insight=insight,
         )
 
         json_str = toon.to_json()
@@ -425,7 +424,7 @@ class TestTOONRepository:
             cost_without_cache=0.000225,
             cost_with_cache=0.0,
             cost_saved=0.000225,
-            model="claude-3-opus"
+            model="claude-3-opus",
         )
 
         semantic_data = TOONSemanticMatchData(
@@ -436,7 +435,7 @@ class TestTOONRepository:
             semantic_distance=None,
             embedding_dimension=None,
             similarity_threshold_used=0.85,
-            threshold_met=False
+            threshold_met=False,
         )
 
         cache_metadata = TOONCacheMetadata(
@@ -447,7 +446,7 @@ class TestTOONRepository:
             last_accessed=datetime.now(),
             created_at=datetime.now(),
             memory_size_bytes=1024,
-            eviction_policy="lru"
+            eviction_policy="lru",
         )
 
         insight = TOONOptimizationInsight(
@@ -458,7 +457,7 @@ class TestTOONRepository:
             cache_efficiency_score=0.95,
             predictability_score=0.8,
             pattern_detected=False,
-            similar_queries_found=0
+            similar_queries_found=0,
         )
 
         toon = TOONCacheOperation(
@@ -471,7 +470,7 @@ class TestTOONRepository:
             token_delta=token_delta,
             semantic_data=semantic_data,
             cache_metadata=cache_metadata,
-            optimization_insight=insight
+            optimization_insight=insight,
         )
 
         # Save
@@ -509,7 +508,7 @@ class TestTOONRepository:
             cost_without_cache=0.00015,
             cost_with_cache=0.0,
             cost_saved=0.00015,
-            model="claude-3-opus"
+            model="claude-3-opus",
         )
 
         semantic_data = TOONSemanticMatchData(
@@ -520,7 +519,7 @@ class TestTOONRepository:
             semantic_distance=None,
             embedding_dimension=None,
             similarity_threshold_used=0.85,
-            threshold_met=False
+            threshold_met=False,
         )
 
         cache_metadata = TOONCacheMetadata(
@@ -531,7 +530,7 @@ class TestTOONRepository:
             last_accessed=None,
             created_at=datetime.now(),
             memory_size_bytes=100,
-            eviction_policy="lru"
+            eviction_policy="lru",
         )
 
         insight = TOONOptimizationInsight(
@@ -542,7 +541,7 @@ class TestTOONRepository:
             cache_efficiency_score=0.95,
             predictability_score=0.8,
             pattern_detected=False,
-            similar_queries_found=0
+            similar_queries_found=0,
         )
 
         toon = TOONCacheOperation(
@@ -555,7 +554,7 @@ class TestTOONRepository:
             token_delta=token_delta,
             semantic_data=semantic_data,
             cache_metadata=cache_metadata,
-            optimization_insight=insight
+            optimization_insight=insight,
         )
 
         await repo.save_toon(toon)
@@ -595,7 +594,7 @@ class TestTOONAnalytics:
                 cost_without_cache=0.000225 + (i * 0.00001),
                 cost_with_cache=0.0,
                 cost_saved=0.000225 + (i * 0.00001),
-                model="claude-3-opus"
+                model="claude-3-opus",
             )
 
             semantic_data = TOONSemanticMatchData(
@@ -606,7 +605,7 @@ class TestTOONAnalytics:
                 semantic_distance=None,
                 embedding_dimension=None,
                 similarity_threshold_used=0.85,
-                threshold_met=False
+                threshold_met=False,
             )
 
             cache_metadata = TOONCacheMetadata(
@@ -617,7 +616,7 @@ class TestTOONAnalytics:
                 last_accessed=datetime.now(),
                 created_at=datetime.now(),
                 memory_size_bytes=1024,
-                eviction_policy="lru"
+                eviction_policy="lru",
             )
 
             insight = TOONOptimizationInsight(
@@ -628,20 +627,22 @@ class TestTOONAnalytics:
                 cache_efficiency_score=0.95,
                 predictability_score=0.8,
                 pattern_detected=False,
-                similar_queries_found=0
+                similar_queries_found=0,
             )
 
             toon = TOONCacheOperation(
                 operation_id=f"op-{i}",
                 timestamp=datetime.now(),
-                operation_type=TOONOperationType.EXACT_HIT if i % 2 == 0 else TOONOperationType.SEMANTIC_HIT,
+                operation_type=TOONOperationType.EXACT_HIT
+                if i % 2 == 0
+                else TOONOperationType.SEMANTIC_HIT,
                 strategy_used=TOONStrategy.EXACT if i % 2 == 0 else TOONStrategy.SEMANTIC,
                 duration_ms=4.5 + i,
                 query_metadata=query_metadata,
                 token_delta=token_delta,
                 semantic_data=semantic_data,
                 cache_metadata=cache_metadata,
-                optimization_insight=insight
+                optimization_insight=insight,
             )
             toons.append(toon)
 
@@ -686,7 +687,7 @@ class TestTOONAnalytics:
                 cost_without_cache=tokens * 0.000015,
                 cost_with_cache=0.0,
                 cost_saved=tokens * 0.000015,
-                model="claude-3-opus"
+                model="claude-3-opus",
             )
 
             semantic_data = TOONSemanticMatchData(
@@ -697,7 +698,7 @@ class TestTOONAnalytics:
                 semantic_distance=None,
                 embedding_dimension=None,
                 similarity_threshold_used=0.85,
-                threshold_met=False
+                threshold_met=False,
             )
 
             cache_metadata = TOONCacheMetadata(
@@ -708,7 +709,7 @@ class TestTOONAnalytics:
                 last_accessed=datetime.now(),
                 created_at=datetime.now(),
                 memory_size_bytes=1024,
-                eviction_policy="lru"
+                eviction_policy="lru",
             )
 
             insight = TOONOptimizationInsight(
@@ -719,7 +720,7 @@ class TestTOONAnalytics:
                 cache_efficiency_score=0.95,
                 predictability_score=0.8,
                 pattern_detected=False,
-                similar_queries_found=0
+                similar_queries_found=0,
             )
 
             toon = TOONCacheOperation(
@@ -732,7 +733,7 @@ class TestTOONAnalytics:
                 token_delta=token_delta,
                 semantic_data=semantic_data,
                 cache_metadata=cache_metadata,
-                optimization_insight=insight
+                optimization_insight=insight,
             )
             toons.append(toon)
 
@@ -779,7 +780,7 @@ class TestTOONExport:
             cost_without_cache=0.0003,
             cost_with_cache=0.0,
             cost_saved=0.0003,
-            model="claude-3-opus"
+            model="claude-3-opus",
         )
 
         semantic_data = TOONSemanticMatchData(
@@ -790,7 +791,7 @@ class TestTOONExport:
             semantic_distance=None,
             embedding_dimension=None,
             similarity_threshold_used=0.85,
-            threshold_met=False
+            threshold_met=False,
         )
 
         cache_metadata = TOONCacheMetadata(
@@ -801,7 +802,7 @@ class TestTOONExport:
             last_accessed=None,
             created_at=datetime.now(),
             memory_size_bytes=500,
-            eviction_policy="lru"
+            eviction_policy="lru",
         )
 
         insight = TOONOptimizationInsight(
@@ -812,7 +813,7 @@ class TestTOONExport:
             cache_efficiency_score=0.95,
             predictability_score=0.8,
             pattern_detected=False,
-            similar_queries_found=0
+            similar_queries_found=0,
         )
 
         toon = TOONCacheOperation(
@@ -825,7 +826,7 @@ class TestTOONExport:
             token_delta=token_delta,
             semantic_data=semantic_data,
             cache_metadata=cache_metadata,
-            optimization_insight=insight
+            optimization_insight=insight,
         )
 
         await repo.save_toon(toon)
