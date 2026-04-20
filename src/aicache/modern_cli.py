@@ -744,24 +744,21 @@ def mcp():
 @click.option("--port", type=int, default=8765, help="TCP port")
 def mcp_start(mode, port):
     """Start the MCP server"""
-    from .mcp_server import AICacheMCPServer
+    from .infrastructure.mcp_server import MCPCacheServer, run_stdio
 
     console.print(f"🚀 [bold]Starting AI Cache MCP Server ({mode} mode)[/bold]")
 
     if mode == "stdio":
         console.print("[dim]Running in stdio mode...[/dim]")
         console.print(
-            "[dim]This server can be connected to Claude Desktop or other MCP clients.[/dim]"
+            "[dim]Connect via Claude Desktop, Claude Code, or any MCP-capable agent.[/dim]"
         )
-        server = AICacheMCPServer(port=port)
         try:
-            server.run_stdio()
+            run_stdio(MCPCacheServer())
         except KeyboardInterrupt:
             console.print("\n👋 Server stopped.")
     else:
-        console.print(f"[dim]Running on port {port}...[/dim]")
-        server = AICacheMCPServer(port=port)
-        server.run_tcp()
+        console.print(f"[yellow]TCP mode (port {port}) is not supported yet — use stdio[/yellow]")
 
 
 @mcp.command("config")
@@ -779,7 +776,7 @@ Add this to your Claude Desktop config:
   "mcpServers": {
     "aicache": {
       "command": "python",
-      "args": ["-m", "aicache.mcp_server"],
+      "args": ["-m", "aicache.infrastructure.mcp_server"],
       "env": {}
     }
   }
